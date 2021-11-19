@@ -2,10 +2,24 @@
 //
 
 #include <iostream>
-
-int main()
+extern "C"
 {
-    std::cout << "Hello World!\n";
+#include <libavutil/dict.h>
+#include <libavformat/avformat.h>
+}
+
+int main(int argc, char **argv)
+{
+    AVFormatContext* fnt_Ctx = NULL;
+    AVDictionary* tag = NULL;
+    int ret;
+
+    if (argc != 2) {
+        std::cout << "Ciao ciao";
+        return 1;
+    }
+    return 0;
+
 }
 
 // Per eseguire il programma: CTRL+F5 oppure Debug > Avvia senza eseguire debug
