@@ -2,25 +2,25 @@
 //
 
 #include <iostream>
-extern "C"
+#include "ScreenRecorder.h"
+
+using namespace std;
+
+/* driver function to run the application */
+int main()
 {
-#include <libavutil/dict.h>
-#include <libavformat/avformat.h>
+	ScreenRecorder screen_record;
+
+	screen_record.openCamera();
+	screen_record.init_outputfile();
+	screen_record.CaptureVideoFrames();
+
+	cout << "\nprogram executed successfully\n";
+
+	return 0;
 }
 
-int main(int argc, char **argv)
-{
-    AVFormatContext* fnt_Ctx = NULL;
-    AVDictionary* tag = NULL;
-    int ret;
 
-    if (argc != 2) {
-        std::cout << "Ciao ciao";
-        return 1;
-    }
-    return 0;
-
-}
 
 // Per eseguire il programma: CTRL+F5 oppure Debug > Avvia senza eseguire debug
 // Per eseguire il debug del programma: F5 oppure Debug > Avvia debug
