@@ -15,11 +15,13 @@ extern "C"
 {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavdevice/avdevice.h>
 }
 
 #include <iostream>
 #include <fstream>
 
+#define __STDC_CONSTANT_MACROS
 
 int main(int argc, const char* argv[]) {
 
@@ -29,17 +31,22 @@ int main(int argc, const char* argv[]) {
 
 	AVDictionary* options = NULL;
 
+	// Serve a iscrivere la nostra aplicazione per l'utilizzo di multimedia device come x11grab, dshow, gdigrab
+	avdevice_register_all();
 
-	//av_dict_set(&options, "framerate", "5", 0);
-	//av_dict_set(&options, "offset_x", "20", 0);
-	//av_dict_set(&options, "offset_y", "40", 0);
-	//av_dict_set(&options, "video_size", "640x480", 0);
+	// Option on recordig video
+	av_dict_set(&options, "framerate", "5", 0);
+	av_dict_set(&options, "offset_x", "20", 0);
+	av_dict_set(&options, "offset_y", "40", 0);
+	av_dict_set(&options, "video_size", "640x480", 0);
 
-	//const AVInputFormat *pAVInputFormat = av_find_input_format("dshow");
+	//auto *pAVInputFormat = av_find_input_format("dshow");
+	auto *pAVInputFormat = av_find_input_format("gdigrab");
+	
 	//int value = avformat_open_input(&formatContext_p, "video=screen-capture-recorder", pAVInputFormat, NULL);
-	//int value = avformat_open_input(&formatContext_p, "desktop", pAVInputFormat, &options);
+	int value = avformat_open_input(&formatContext_p, "desktop", pAVInputFormat, &options);
 
-	int value = avformat_open_input(&formatContext_p, fileName, nullptr, nullptr);
+	//int value = avformat_open_input(&formatContext_p, fileName, nullptr, nullptr);
 
 	if (value != 0)
 	{
