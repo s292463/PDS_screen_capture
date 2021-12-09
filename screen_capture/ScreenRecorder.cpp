@@ -52,10 +52,10 @@ int ScreenRecorder::CaptureVideoFrames()
 	int frame_index = 0;
 	value = 0;
 
-	pAVPacket = (AVPacket*)av_malloc(sizeof(AVPacket));
-	av_init_packet(pAVPacket);
+	pAVPacket = av_packet_alloc();
 
 	pAVFrame = av_frame_alloc();
+
 	if (!pAVFrame)
 	{
 		cout << "\nunable to release the avframe resources";
@@ -105,7 +105,7 @@ int ScreenRecorder::CaptureVideoFrames()
 	cout << "\nenter No. of frames to capture : ";
 	cin >> no_frames;
 
-	AVPacket outPacket;
+	AVPacket *outPacket = av_packet_alloc();
 	int j = 0;
 
 	int got_picture;
@@ -116,41 +116,58 @@ int ScreenRecorder::CaptureVideoFrames()
 		if (ii++ == no_frames)break;
 		if (pAVPacket->stream_index == VideoStreamIndx)
 		{
-			value = avcodec_decode_video2(pAVCodecContext, pAVFrame, &frameFinished, pAVPacket);
+			//value = avcodec_decode_video2(pAVCodecContext, pAVFrame, &frameFinished, pAVPacket);
+			value = avcodec_send_packet(pAVCodecContext, pAVPacket);
 			if (value < 0)
 			{
-				cout << "unable to decode video";
+				cout << "unable to Send packet to decoder";
 			}
 
-			if (frameFinished)// Frame successfully decoded :)
+			value = avcodec_receive_frame(pAVCodecContext, pAVFrame);
+			if (value < 0)// Frame successfully decoded :)
 			{
-				sws_scale(swsCtx_, pAVFrame->data, pAVFrame->linesize, 0, pAVCodecContext->height, outFrame->data, outFrame->linesize);
-				av_init_packet(&outPacket);
-				outPacket.data = NULL;    // packet data will be allocated by the encoder
-				outPacket.size = 0;
+				cout << "unable to receive frame from decoder";
+			}
+			//sws_scale(swsCtx_, pAVFrame->data, pAVFrame->linesize, 0, pAVCodecContext->height, outFrame->data, outFrame->linesize);
+			//av_init_packet(&outPacket);
+			//outPacket.data = NULL;    // packet data will be allocated by the encoder
+			//outPacket.size = 0;
 
-				avcodec_encode_video2(outAVCodecContext, &outPacket, outFrame, &got_picture);
+			//avcodec_encode_video2(outAVCodecContext, &outPacket, outFrame, &got_picture);
 
-				if (got_picture)
-				{
-					if (outPacket.pts != AV_NOPTS_VALUE)
-						outPacket.pts = av_rescale_q(outPacket.pts, video_st->codec->time_base, video_st->time_base);
-					if (outPacket.dts != AV_NOPTS_VALUE)
-						outPacket.dts = av_rescale_q(outPacket.dts, video_st->codec->time_base, video_st->time_base);
+			value = avcodec_send_frame(pAVCodecContext, pAVFrame);
+			if (value < 0)
+			{
+				cout << "unable to Send frame to encoder";
+			}
 
-					printf("Write frame %3d (size= %2d)\n", j++, outPacket.size / 1000);
-					if (av_write_frame(outAVFormatContext, &outPacket) != 0)
-					{
-						cout << "\nerror in writing video frame";
-					}
+			value = avcodec_receive_packet(pAVCodecContext, outPacket);
+			if (value < 0)// Frame successfully decoded :)
+			{
+				cout << "unable to receive packet from encoder";
+			}
 
-					av_packet_unref(&outPacket);
-				} // got_picture
+			auto in_stream = pAVFormatContext->streams[VideoStreamIndx];
+			outPacket->stream_index = VideoStreamIndx;
+			outPacket->duration = video_st->time_base.den / video_st->time_base.num / video_st->avg_frame_rate.num * in_stream->avg_frame_rate.den;
+			av_packet_rescale_ts(outPacket, in_stream->time_base, video_st->time_base);
 
-				av_packet_unref(&outPacket);
+
+			if (av_interleaved_write_frame(outAVFormatContext, outPacket) < 0)
+			{
+				cout << "\nerror in writing video frame";
+			}
+
+			printf("Write frame %3d (size= %2d)\n", j++, outPacket->size / 1000);
+			if (av_interleaved_write_frame(outAVFormatContext, outPacket) != 0)
+			{
+				cout << "\nerror in writing video frame";
+			}
+
+			av_packet_unref(outPacket);
 			} // frameFinished
 
-		}
+		
 	}// End of while-loop
 
 	value = av_write_trailer(outAVFormatContext);
@@ -183,8 +200,12 @@ This device allows one to capture a region of an X11 display.
 refer : https://www.ffmpeg.org/ffmpeg-devices.html#x11grab
 */
 /* current below is for screen recording. to connect with camera use v4l2 as a input parameter for av_find_input_format */
-	pAVInputFormat = av_find_input_format("x11grab");
-	value = avformat_open_input(&pAVFormatContext, ":0.0+10,250", pAVInputFormat, NULL);
+
+	auto *pAVInputFormat = av_find_input_format("gdigrab");
+	//auto* pAVInputFormat = av_find_input_format("dshow");
+
+	//int value = avformat_open_input(&pAVFormatContext, "video=screen-capture-recorder", pAVInputFormat, NULL);
+	int value = avformat_open_input(&pAVFormatContext, "desktop", pAVInputFormat, &options);
 	if (value != 0)
 	{
 		cout << "\nerror in opening input device";
@@ -199,28 +220,31 @@ refer : https://www.ffmpeg.org/ffmpeg-devices.html#x11grab
 		exit(1);
 	}
 
-	value = av_dict_set(&options, "preset", "medium", 0);
+	/*value = av_dict_set(&options, "preset", "medium", 0);
 	if (value < 0)
 	{
 		cout << "\nerror in setting preset values";
 		exit(1);
-	}
+	}*/
 
 	//	value = avformat_find_stream_info(pAVFormatContext,NULL);
-	if (value < 0)
+	/*if (value < 0)
 	{
 		cout << "\nunable to find the stream information";
 		exit(1);
-	}
+	}*/
 
 	VideoStreamIndx = -1;
+	AVCodecParameters* codecParmetersVideo = nullptr;
 
 	/* find the first video stream index . Also there is an API available to do the below operations */
-	for (int i = 0; i < pAVFormatContext->nb_streams; i++) // find video stream posistion/index.
+	for (unsigned int i = 0; i < pAVFormatContext->nb_streams; i++) // find video stream posistion/index.
 	{
 		if (pAVFormatContext->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
 		{
+
 			VideoStreamIndx = i;
+			codecParmetersVideo = pAVFormatContext->streams[i]->codecpar;
 			break;
 		}
 
@@ -232,10 +256,12 @@ refer : https://www.ffmpeg.org/ffmpeg-devices.html#x11grab
 		exit(1);
 	}
 
-	// assign pAVFormatContext to VideoStreamIndx
-	pAVCodecContext = pAVFormatContext->streams[VideoStreamIndx]->codec;
+	// assign pAVFormatContext to VideoStreamIndex
+	
+	pAVCodec = avcodec_find_decoder(codecParmetersVideo->codec_id);
+	pAVCodecContext = avcodec_alloc_context3(pAVCodec);
+	avcodec_parameters_to_context(pAVCodecContext, codecParmetersVideo);
 
-	pAVCodec = avcodec_find_decoder(pAVCodecContext->codec_id);
 	if (pAVCodec == NULL)
 	{
 		cout << "\nunable to find the decoder";
@@ -255,7 +281,7 @@ int ScreenRecorder::init_outputfile()
 {
 	outAVFormatContext = NULL;
 	value = 0;
-	output_file = "../media/output.mp4";
+	output_file = "C:/Users/chris/Desktop/output.mp4";
 
 	avformat_alloc_output_context2(&outAVFormatContext, NULL, NULL, output_file);
 	if (!outAVFormatContext)
@@ -285,26 +311,49 @@ int ScreenRecorder::init_outputfile()
 		cout << "\nerror in allocating the codec contexts";
 		exit(1);
 	}
+	//===============================================
+	unsigned int tag = 0;
+	outAVCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	if (!outAVCodec)
+	{
+		cout << "\nerror in finding the av codecs. try again with correct codec";
+		exit(1);
+	}
+
+	value = av_codec_get_tag2(outAVFormatContext->oformat->codec_tag, outAVCodec->id, &tag);
+	if (value == 0) {
+		std::cout << "Can't find tag for codec" << std::endl;
+		std::exit(1);
+	}
+
 
 	/* set property of the video file */
-	outAVCodecContext = video_st->codec;
-	outAVCodecContext->codec_id = AV_CODEC_ID_MPEG4;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
+	//outAVCodecContext = video_st->codecpar;
+	outAVCodecContext->codec_id = AV_CODEC_ID_H264;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
 	outAVCodecContext->codec_type = AVMEDIA_TYPE_VIDEO;
 	outAVCodecContext->pix_fmt = AV_PIX_FMT_YUV420P;
 	outAVCodecContext->bit_rate = 400000; // 2500000
 	outAVCodecContext->width = 1920;
 	outAVCodecContext->height = 1080;
-	outAVCodecContext->gop_size = 3;
+	outAVCodecContext->codec_tag = tag;
+	outAVCodecContext->gop_size = 12;
 	outAVCodecContext->max_b_frames = 2;
 	outAVCodecContext->time_base.num = 1;
 	outAVCodecContext->time_base.den = 30; // 15fps
 
-	if (codec_id == AV_CODEC_ID_H264)
+	//=====================================
+
+	//avcodec_parameters_to_context(outAVCodecContext, video_st->codecpar);
+
+	//=====================================
+
+
+	if (outAVCodecContext->codec_id == AV_CODEC_ID_H264)
 	{
 		av_opt_set(outAVCodecContext->priv_data, "preset", "slow", 0);
 	}
 
-	outAVCodec = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
+	outAVCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
 	if (!outAVCodec)
 	{
 		cout << "\nerror in finding the av codecs. try again with correct codec";

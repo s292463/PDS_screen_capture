@@ -53,7 +53,7 @@ class ScreenRecorder
 {
 private:
 	AVInputFormat* pAVInputFormat;
-	AVOutputFormat* output_format;
+	const AVOutputFormat* output_format;
 
 	AVCodecContext* pAVCodecContext;
 
@@ -62,8 +62,8 @@ private:
 	AVFrame* pAVFrame;
 	AVFrame* outFrame;
 
-	AVCodec* pAVCodec;
-	AVCodec* outAVCodec;
+	const AVCodec* pAVCodec;
+	const AVCodec* outAVCodec;
 
 	AVPacket* pAVPacket;
 

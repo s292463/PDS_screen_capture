@@ -15,8 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="screen_capture.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="ScreenRecorder.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
     <ClCompile Include="Origine.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ScreenRecorder.h">
+      <Filter>File di origine</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
