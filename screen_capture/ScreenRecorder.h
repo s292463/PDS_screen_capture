@@ -52,10 +52,12 @@ extern "C"
 class ScreenRecorder
 {
 private:
-	AVInputFormat* pAVInputFormat;
+	const AVInputFormat* pAVInputFormat;
 	const AVOutputFormat* output_format;
 
 	AVCodecContext* pAVCodecContext;
+
+	AVCodecParameters* pCodecParameters;
 
 	AVFormatContext* pAVFormatContext;
 
@@ -64,6 +66,7 @@ private:
 
 	const AVCodec* pAVCodec;
 	const AVCodec* outAVCodec;
+	const AVCodec* pLocalCodec;
 
 	AVPacket* pAVPacket;
 

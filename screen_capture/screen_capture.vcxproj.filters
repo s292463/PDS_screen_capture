@@ -15,13 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="screen_capture.cpp">
+    <ClCompile Include="Origine.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="ScreenRecorder.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
-    <ClCompile Include="Origine.cpp">
+    <ClCompile Include="screen_capture.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>
