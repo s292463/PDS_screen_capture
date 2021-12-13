@@ -38,16 +38,24 @@ extern "C"
 #include <thread>
 #include <string>
 #include <vector>
+#include <cstring>
 
 
 typedef struct {
-	const char* height;
-	const char* width;
-}resolution;
+	std::string width;
+	std::string height;
+}Resolution;
+
+enum StreamType
+{
+	VIDEO,
+	AUDIO
+};
 
 class VideoCapture
 {
-	const char* outputFileName;
+	std::string outputFileName;
+	std::string inputFileName;
 
 	AVFormatContext* inputFormatContext = nullptr;
 	AVFormatContext* outputFormatContext = nullptr;
@@ -64,58 +72,21 @@ class VideoCapture
 	AVDictionary* options = nullptr;
 
 	// Capture Options
-	const char* framerate;
-	const char* offset_x;
-	const char* offset_y;
+	std::string framerate;
+	std::string offset_x;
+	std::string offset_y;
+	Resolution res;
 
-	std::vector<int> stream_index;
-
+	std::vector<int> stream_index;	
 	bool audioOn;
 
+public:
+
+	VideoCapture(std::string outputFileName, Resolution res, std::string offset_x, std::string offset_y);
+	~VideoCapture();
 	
-
-	explicit VideoCapture(char* outputFileName, resolution res, const char* offset_x, const char* offset_y) :
-		outputFileName(outputFileName),
-		audioOn(true),
-		framerate("30"),
-		
-		offset_x{ offset_x },
-		offset_y{ offset_y },
-		stream_index{0,0}
-	{
-		avdevice_register_all(); // It's not thread safe
-	}
-
-
-	int intilizeDecoder() {
-
-		const AVInputFormat* pAVInputFormat = av_find_input_format("gdigrab");
-		if (!pAVInputFormat) {
-			std::cout << "Error in opening input device";
-			exit(1);
-		}
-
-		// Option dictionary
-		av_dict_set(&options, "framerate", this->framerate, 0);
-		av_dict_set(&options, "preset", "medium", 0);
-		av_dict_set(&options, "offset_x", this->offset_x, 0);
-		av_dict_set(&options, "offset_y", this->offset_y, 0);
-		av_dict_set(&options, "video_size", "1920x1080", 0);
-		av_dict_set(&options, "probesize", "20M", 0);
-
-
-		// alloc AVFormatContext input
-		inputFormatContext = avformat_alloc_context();
-		if (!inputFormatContext) {
-			std::cout << "Can't allocate input context" << std::endl;
-			std::exit(1);
-		}
-		if (avformat_open_input(&inputFormatContext, "desktop", pAVInputFormat, &options) < 0) {
-			std::cout << "Can't open input context" << std::endl;
-			std::exit(1);
-		}
-
-	}
+	int intilizeDecoder();
+	int initializeEncoder();
+	int startCapturing(int n_frame);
 
 };
-

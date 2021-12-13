@@ -51,7 +51,7 @@ extern "C"
 
 #define __STDC_CONSTANT_MACROS
 
-int main(int argc, const char* argv[]) {
+int ciccio(int argc, const char* argv[]) {
 
 	//const char *inputFileName = "C:/Users/chris/Desktop/VID-20161112-WA0038.mp4";
 	//const char* inputFileName = "C:\\Users\\elia_\\OneDrive\\Desktop\\VID-20161112-WA0038.mp4";
@@ -307,6 +307,8 @@ int main(int argc, const char* argv[]) {
 	
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
+	AVPacket* outPacket = av_packet_alloc();
+	if (!outPacket) { std::cout << "Error on allocating output Packet"; exit(1); }
 	AVFrame* inFrame = av_frame_alloc();
 	if (!inFrame) { std::cout << "Error on allocating input Frame"; exit(1); }
 	AVFrame* outFrame = av_frame_alloc();
@@ -355,7 +357,6 @@ int main(int argc, const char* argv[]) {
 		videoEncoderContext->pix_fmt,
 		SWS_BICUBIC, NULL, NULL, NULL);
 
-	AVPacket* outPacket;
 
 	int fn = 0;
 	const int n_frame = 100;
@@ -401,8 +402,7 @@ int main(int argc, const char* argv[]) {
 				exit(1);
 			}
 
-			outPacket = av_packet_alloc();
-			if (!outPacket) { std::cout << "Error on allocating output Packet"; exit(1); }
+			
 			outPacket->data = nullptr;    // i dati del pacchetto verranno allocati dall'encoder
 			outPacket->size = 0;
 
@@ -456,13 +456,13 @@ int main(int argc, const char* argv[]) {
 					break;
 				}
 			}
-			av_packet_free(&outPacket);
+			//av_packet_free(&outPacket);
 			//av_packet_unref(outPacket);			
 			/*av_frame_unref(inFrame);
 			av_packet_unref(inPacket);*/
 
 		}
-		av_packet_free(&outPacket);
+		av_packet_unref(outPacket);
 	}
 
 	

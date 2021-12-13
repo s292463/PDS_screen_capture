@@ -143,7 +143,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Origine.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="VideoCapture.cpp" />
   </ItemGroup>
   <ItemGroup>
