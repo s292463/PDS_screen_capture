@@ -144,11 +144,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Origine.cpp" />
-    <ClCompile Include="ScreenRecorder.cpp" />
-    <ClCompile Include="screen_capture.cpp" />
+    <ClCompile Include="VideoCapture.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ScreenRecorder.h" />
+    <ClInclude Include="VideoCapture.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

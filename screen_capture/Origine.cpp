@@ -46,6 +46,8 @@ extern "C"
 
 #include <iostream>
 #include <fstream>
+#include <chrono>
+#include <thread>
 
 #define __STDC_CONSTANT_MACROS
 
@@ -54,7 +56,7 @@ int main(int argc, const char* argv[]) {
 	//const char *inputFileName = "C:/Users/chris/Desktop/VID-20161112-WA0038.mp4";
 	//const char* inputFileName = "C:\\Users\\elia_\\OneDrive\\Desktop\\VID-20161112-WA0038.mp4";
 	//const char* inputFileName = "C:\\Users\\elia_\\OneDrive\\Desktop\\small_bunny_1080p_60fps.mp4";
-	const char* outputFileName = "C:/Users/chris/Desktop/output.mp4";
+	const char* outputFileName = "C:/Users/chrees/Desktop/output.mp4";
 	const char* inputFileName = "gdigrab";
 
 	// Allocation of the main format context where the imported media file is stored
@@ -234,7 +236,7 @@ int main(int argc, const char* argv[]) {
 	videoEncoderContext->gop_size = 3;
 	videoEncoderContext->max_b_frames = 2;
 	videoEncoderContext->time_base.num = 1;
-	videoEncoderContext->time_base.den = 30; // 15 fps
+	videoEncoderContext->time_base.den = 15; // 15 fps
 	//videoEncoderContext->bit_rate = 400000;
 	
 
@@ -356,10 +358,14 @@ int main(int argc, const char* argv[]) {
 	AVPacket* outPacket;
 
 	int fn = 0;
-	const int n_frame = 150;
+	const int n_frame = 100;
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
 	while (av_read_frame(inputFormatContext, inPacket) >= 0 && fn++ < n_frame) {
 
+		if (fn == 50) {
+			std::chrono::milliseconds timespan(5000);
+			std::this_thread::sleep_for(timespan);
+		}
 		/*AVStream* in_stream, * out_stream;
 		in_stream = inputFormatContext->streams[inPacket->stream_index];
 		out_stream = outputFormatContext->streams[inPacket->stream_index];*/
