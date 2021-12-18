@@ -39,11 +39,21 @@ extern "C"
 #include <string>
 #include <vector>
 #include <cstring>
+#include <condition_variable>
 
+
+enum Options
+{
+	STOP,
+	PLAY,
+	CLOSE,
+	AUDIO_ON_OFF
+};
 
 typedef struct {
 	std::string width;
 	std::string height;
+
 }Resolution;
 
 enum StreamType
@@ -82,11 +92,11 @@ class VideoCapture
 
 public:
 
-	VideoCapture(std::string outputFileName, Resolution res, std::string offset_x, std::string offset_y);
+	VideoCapture(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y);
 	~VideoCapture();
 	
 	int intilizeDecoder();
 	int initializeEncoder();
-	int startCapturing(int n_frame);
+	int startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, std::condition_variable& cv, int& stopRecording);
 
 };
