@@ -1,12 +1,12 @@
 #include "VideoCapture.h"
 
 
-// CONSTRUCTOR AND DISTRUCTOR ==================================================================================
-VideoCapture::VideoCapture(std::string outputFileName, Resolution res, std::string offset_x, std::string offset_y):
+// CONSTRUCTOR AND DISTRUCTOR =================================================
+VideoCapture::VideoCapture(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y):
 	outputFileName(outputFileName),
 	inputFileName("gdigrab"),
 	audioOn(true),
-	framerate("30"),
+	framerate(framerate),
 	res(res),
 	offset_x{ offset_x },
 	offset_y{ offset_y },
@@ -100,6 +100,8 @@ int VideoCapture::intilizeDecoder() {
 				return(-1);
 			}
 
+			inStream = inputFormatContext->streams[stream_index[StreamType::VIDEO]];
+
 			break;
 
 		}
@@ -172,12 +174,13 @@ int VideoCapture::initializeEncoder()
 	//videoEncoderContext->codec_id = AV_CODEC_ID_MPEG4;
 	videoEncoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
 	//videoEncoderContext->sample_aspect_ratio = videoDecoderContext->sample_aspect_ratio;
-	videoEncoderContext->height = 1080;// videoDecoderContext->height;
-	videoEncoderContext->width = 1920;// videoDecoderContext->width;
+	videoEncoderContext->height = std::stoi(this->res.height);// videoDecoderContext->height;
+	videoEncoderContext->width = std::stoi(this->res.width);// videoDecoderContext->width;
 	videoEncoderContext->gop_size = 3;
 	videoEncoderContext->max_b_frames = 2;
 	videoEncoderContext->time_base.num = 1;
 	videoEncoderContext->time_base.den = 30; // 15 fps
+	//videoEncoderContext->time_base = inStream->time_base;
 	//videoEncoderContext->bit_rate = 400000;
 
 
@@ -206,7 +209,8 @@ int VideoCapture::initializeEncoder()
 		exit(1);
 	}
 
-	outStream->time_base = { 1, 30 };
+	//outStream->time_base = { 1, 30 };
+	outStream->time_base = videoEncoderContext->time_base;
 
 	//We set the flag AV_CODEC_FLAG_GLOBAL_HEADER which tells the encoder that it can use the global headers
 	if (outputFormatContext->oformat->flags & AVFMT_GLOBALHEADER) {
@@ -243,7 +247,7 @@ int VideoCapture::initializeEncoder()
 }
 
 
-int VideoCapture::startCapturing(int n_frame) {
+int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, std::condition_variable& cv,int& stopRecording) {
 
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
@@ -301,15 +305,19 @@ int VideoCapture::startCapturing(int n_frame) {
 	int fn = 0;
 
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
-	while (av_read_frame(inputFormatContext, inPacket) >= 0 && fn++ < n_frame) {
+	while (fn++ < n_frame) {
+
+		cv.wait(ul, [& stopRecording]() {return stopRecording == 1; });
+
+		if (av_read_frame(inputFormatContext, inPacket) < 0) {
+			std::cout << "Error on reading packet" << std::endl;
+			return -1;
+		}
 
 		/*if (fn == 50) {
 			std::chrono::milliseconds timespan(5000);
 			std::this_thread::sleep_for(timespan);
 		}*/
-		/*AVStream* in_stream, * out_stream;
-		in_stream = inputFormatContext->streams[inPacket->stream_index];
-		out_stream = outputFormatContext->streams[inPacket->stream_index];*/
 
 		// Poiche' il formatContext e' uno solo dobbiamo distinguere noi da quale
 		// stream arriva il paccketto in modo da processarlo correttamente
@@ -371,10 +379,10 @@ int VideoCapture::startCapturing(int n_frame) {
 
 			if (value >= 0) {
 
-				std::cout << "Frame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
+				std::cout << "\rFrame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
 
 				//outPacket->stream_index = video_stream_index;
-				//outPacket->duration = out_stream->time_base.den / out_stream->time_base.num / in_stream->avg_frame_rate.num * in_stream->avg_frame_rate.den;
+				//outPacket->duration = outStream->time_base.den / outStream->time_base.num / inStream->avg_frame_rate.num * inStream->avg_frame_rate.den;
 				//av_packet_rescale_ts(outPacket, in_stream->time_base, out_stream->time_base);
 				/*outPacket->dts = av_rescale_q_rnd(outPacket->dts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
 				outPacket->pts = av_rescale_q_rnd(outPacket->pts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
@@ -391,7 +399,9 @@ int VideoCapture::startCapturing(int n_frame) {
 					break;
 				}
 			}
+
 		}
+		//ul.unlock();
 		av_packet_unref(outPacket);
 	}
 
@@ -402,7 +412,7 @@ int VideoCapture::startCapturing(int n_frame) {
 		exit(1);
 	}
 
-
+	// TODO: memory leakage potrebbe finire prima di liberare queste risorse
 	av_free(video_outbuf);
 	av_packet_free(&outPacket);
 	av_packet_free(&inPacket);
