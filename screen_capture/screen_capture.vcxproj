@@ -146,7 +146,6 @@
   <ItemGroup>
     <ClCompile Include="AudioRecorder.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="main1.cpp" />
     <ClCompile Include="VideoCapture.cpp" />
   </ItemGroup>
   <ItemGroup>

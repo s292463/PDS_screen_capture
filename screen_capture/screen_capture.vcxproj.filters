@@ -24,9 +24,6 @@
     <ClCompile Include="AudioRecorder.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
-    <ClCompile Include="main1.cpp">
-      <Filter>File di origine</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="VideoCapture.h">
