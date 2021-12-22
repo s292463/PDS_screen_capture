@@ -62,7 +62,7 @@ int main() {
 
 using namespace std;
 
-int main() {
+int main1() {
     puts("==== Audio Recorder ====");
     avdevice_register_all();
 
