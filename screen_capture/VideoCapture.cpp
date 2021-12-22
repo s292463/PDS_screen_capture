@@ -412,7 +412,7 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 		exit(1);
 	}
 
-	// potrebbe finire prima di liberare queste risorse
+	// TODO: memory leakage potrebbe finire prima di liberare queste risorse
 	av_free(video_outbuf);
 	av_packet_free(&outPacket);
 	av_packet_free(&inPacket);
