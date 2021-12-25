@@ -1,9 +1,9 @@
 #ifndef AUDIORECORDER_AUDIORECORDER_H
 #define AUDIORECORDER_AUDIORECORDER_H
 
-//#ifdef WINDOWS
-//#include "ListAVDevices.h"
-//#endif
+#ifdef _WIN32
+#include "ListAVDevices.h"
+#endif
 
 #include "ffmpeg.h"
 #include <string>

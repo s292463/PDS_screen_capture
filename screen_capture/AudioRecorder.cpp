@@ -13,10 +13,10 @@ void AudioRecorder::Open()
     int ret;
 
     //ref: https://ffmpeg.org/ffmpeg-devices.html
-/*#ifdef WINDOWS*/
+#ifdef _WIN32
     if (deviceName == "") {
-        deviceName = "@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{9FF96969-7CB9-458F-8407-EB85A9265599}";
-        //DS_GetDefaultDevice("a");
+        deviceName = DS_GetDefaultDevice("a");
+            //"@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{9FF96969-7CB9-458F-8407-EB85A9265599}";
         if (deviceName == "") {
             throw std::runtime_error("Fail to get default audio device, maybe no microphone.");
         }
@@ -30,8 +30,9 @@ void AudioRecorder::Open()
 #elif UNIX
     if(deviceName == "") deviceName = "default";
     AVInputFormat *inputFormat=av_find_input_format("pulse");
-#endif
 */
+#endif
+
 
     ret = avformat_open_input(&audioInFormatCtx, deviceName.c_str(), inputFormat, &options);
     if (ret != 0) {
@@ -197,7 +198,9 @@ void AudioRecorder::StartEncode()
         if (ret < 0) {
             throw std::runtime_error("Fail to swr_convert.");
         }
-        if (av_audio_fifo_space(audioFifo) < inputFrame->nb_samples) throw std::runtime_error("audio buffer is too small.");
+        if (av_audio_fifo_space(audioFifo) < inputFrame->nb_samples) {
+            throw std::runtime_error("audio buffer is too small.");
+        }
 
         ret = av_audio_fifo_write(audioFifo, (void**)cSamples, inputFrame->nb_samples);
         if (ret < 0) {

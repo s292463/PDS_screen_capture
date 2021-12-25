@@ -1,9 +1,10 @@
-
 #ifndef AUDIORECORDER_LISTAVDEVICES_H
 #define AUDIORECORDER_LISTAVDEVICES_H
 
-//#ifdef WINDOWS
+#ifdef _WIN32
 //ref:  https://blog.csdn.net/jhqin/article/details/5929796
+#pragma comment(lib, "strmiids.lib")
+//#include <strmiids.lib>
 #include <windows.h>
 #include <vector>
 #include <dshow.h>
@@ -24,5 +25,5 @@ std::string Utf8ToGbk(const char *src_str);
 
 std::string DS_GetDefaultDevice(std::string type);
 
-//#endif
+#endif
 #endif //AUDIORECORDER_LISTAVDEVICES_H

@@ -1,7 +1,6 @@
 
+#ifdef _WIN32
 #include "ListAVDevices.h"
-
-//#ifdef WINDOWS
 
 static std::string unicode2utf8(const WCHAR* uni) {
 	static char temp[500];// max length of friendly name by UTF-16 is 128, so 500 in enough by utf-8
@@ -145,4 +144,4 @@ std::string DS_GetDefaultDevice(std::string type) {
 	}
 }
 
-//#endif
+#endif

@@ -5,7 +5,7 @@
 #include <mutex>
 
 
-int main() {
+int main0() {
 
 	std::condition_variable cv;
 	std::mutex m;
@@ -62,7 +62,7 @@ int main() {
 
 using namespace std;
 
-int main1() {
+int main() {
     puts("==== Audio Recorder ====");
     avdevice_register_all();
 
