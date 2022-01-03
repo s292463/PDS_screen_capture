@@ -1,22 +1,23 @@
-#include "VideoCapture.h"
+#include "VideoRecorder.h"
 
 
 // CONSTRUCTOR AND DISTRUCTOR =================================================
-VideoCapture::VideoCapture(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y):
+VideoRecorder::VideoRecorder(std::string outputFileName, int n_frame, std::string framerate, Resolution res, std::string offset_x, std::string offset_y):
 	outputFileName(outputFileName),
 	inputFileName("gdigrab"),
+	num_frame(n_frame),
 	audioOn(true),
 	framerate(framerate),
 	res(res),
 	offset_x{ offset_x },
 	offset_y{ offset_y },
-	stream_index{ 0,0 }
+	stream_index{ 0,0 },
+	failReason("")
 {
 	avdevice_register_all(); // It's not thread safe
 }
 
-
-VideoCapture::~VideoCapture() {
+VideoRecorder::~VideoRecorder() {
 
 	// Close format context input
 	if (inputFormatContext)
@@ -43,12 +44,36 @@ VideoCapture::~VideoCapture() {
 }
 
 // FUNCTIONS ===============================================================
-int VideoCapture::intilizeDecoder() {
+
+void VideoRecorder::Open() {
+
+	intilizeDecoder();
+	initializeEncoder();
+}
+
+void VideoRecorder::Start() {
+
+	t_capturer = new std::thread{
+		[this]() {
+			try {
+				this->startCapturing(this->num_frame);
+			}
+			catch (std::exception& e) {
+				this->failReason = e.what();
+			}
+
+		}
+	};
+
+	t_capturer->join();
+
+}
+
+void VideoRecorder::intilizeDecoder() {
 
 	const AVInputFormat* pAVInputFormat = av_find_input_format("gdigrab");
 	if (!pAVInputFormat) {
-		std::cout << "Error in opening input device";
-		return(-1);
+		throw std::runtime_error("Error in opening input device");
 	}
 
 	// Option dictionary
@@ -63,19 +88,17 @@ int VideoCapture::intilizeDecoder() {
 	// alloc AVFormatContext input
 	inputFormatContext = avformat_alloc_context();
 	if (!avformat_alloc_context()) {
-		std::cout << "Can't allocate input context" << std::endl;
-		return(-1);
+		throw std::runtime_error("Can't allocate input context");
 	}
 	if (avformat_open_input(&inputFormatContext, "desktop", pAVInputFormat, &options) < 0) {
-		std::cout << "Can't open input context" << std::endl;
-		return(-1);
+		throw std::runtime_error("Can't open input context");
 	}
 
 	//Read packets of a media file to get stream information.
 	if (avformat_find_stream_info(inputFormatContext, &options) < 0)
 	{
-		std::cout << "\nunable to find the stream information";
-		return(-1);
+		throw std::runtime_error("\nunable to find the stream information");
+		
 	}
 
 	for (unsigned int i = 0; i < inputFormatContext->nb_streams; i++)
@@ -96,8 +119,8 @@ int VideoCapture::intilizeDecoder() {
 			videoDecoder = avcodec_find_decoder(inputFormatContext->streams[i]->codecpar->codec_id);
 			if (!videoDecoder) // Eseguo check
 			{
-				std::cout << "\nUnable to find the Decoder";
-				return(-1);
+				throw std::runtime_error("\nUnable to find the Decoder");
+	
 			}
 
 			inStream = inputFormatContext->streams[stream_index[StreamType::VIDEO]];
@@ -111,63 +134,54 @@ int VideoCapture::intilizeDecoder() {
 	videoDecoderContext = avcodec_alloc_context3(videoDecoder);
 	if (!videoDecoderContext)
 	{
-		std::cout << "\nUnable to allocate the decoder context";
-		return(-1);
+		throw std::runtime_error("\nUnable to allocate the decoder context");
 	}
 
 	if (avcodec_parameters_to_context(videoDecoderContext, inputFormatContext->streams[stream_index[0]]->codecpar) < 0)
 	{
-		std::cout << "\nUnable to set the parameter of the codec";
-		return(-1);
+		throw std::runtime_error("\nUnable to set the parameter of the codec");
 	}
 
 	// Inizializziamo il Decoder Context con il codec aprendolo
 	if (avcodec_open2(videoDecoderContext, videoDecoder, NULL) < 0)
 	{
-		std::cout << "\nUnable to open the av codec";
-		return(-1);
+		throw std::runtime_error("\nUnable to open the av codec");
 	}
 
 	//Stampo le informazioni dell' input format context
 	av_dump_format(inputFormatContext, 0, this->inputFileName.c_str(), 0);
 
-	return 0;
 }
 
-int VideoCapture::initializeEncoder()
+void VideoRecorder::initializeEncoder()
 {
 	// Alloco il format context di output
 	if (avformat_alloc_output_context2(&outputFormatContext, NULL, NULL, outputFileName.c_str()) < 0) {
-		std::cout << "Can't open output context" << std::endl;
-		std::exit(1);
+		throw std::runtime_error("Can't open output context");
 	}
 
 	if (!outputFormatContext) //Effettuo un check
 	{
-		std::cout << "\nError in allocating av format output context";
-		exit(1);
+		throw std::runtime_error("\nError in allocating av format output context");
 	}
 
 	// Cerca un formato che mecci il formato di output. Ritorna NULL se non ne trova uno
 	if (!av_guess_format(NULL, this->outputFileName.c_str(), NULL)) //Effettuo un check
 	{
-		std::cout << "\nError in guessing the video format. try with correct format";
-		exit(1);
+		throw std::runtime_error("\nError in guessing the video format. try with correct format");
 	}
 
 
 	videoEncoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
 	if (!videoEncoder) // Eseguo check
 	{
-		std::cout << "\nUnable to find the encoder";
-		exit(1);
+		throw std::runtime_error("\nUnable to find the encoder");
 	}
 
 	videoEncoderContext = avcodec_alloc_context3(videoEncoder);
 	if (!videoEncoderContext) // Eseguo check
 	{
-		std::cout << "\nUnable to allocate the encoder context";
-		exit(1);
+		throw std::runtime_error("\nUnable to allocate the encoder context");
 	}
 
 	// Encoder Settings
@@ -179,7 +193,7 @@ int VideoCapture::initializeEncoder()
 	videoEncoderContext->gop_size = 3;
 	videoEncoderContext->max_b_frames = 2;
 	videoEncoderContext->time_base.num = 1;
-	videoEncoderContext->time_base.den = 30; // 15 fps
+	videoEncoderContext->time_base.den = 15; // 15 fps
 	//videoEncoderContext->time_base = inStream->time_base;
 	//videoEncoderContext->bit_rate = 400000;
 
@@ -188,14 +202,12 @@ int VideoCapture::initializeEncoder()
 
 	if (avcodec_open2(videoEncoderContext, videoEncoder, nullptr) < 0) //Effettuo un check
 	{
-		std::cout << "\nError in opening the Encoder";
-		exit(1);
+		throw std::runtime_error("\nError in opening the Encoder");
 	}
 
 	outStream = avformat_new_stream(outputFormatContext, videoEncoder);
 	if (!outStream) {
-		av_log(NULL, AV_LOG_ERROR, "Failed allocating output stream\n");
-		return AVERROR_UNKNOWN;
+		throw std::runtime_error("Failed allocating output stream\n");
 	}
 
 	if (videoEncoderContext->codec_id == AV_CODEC_ID_H264)
@@ -205,8 +217,7 @@ int VideoCapture::initializeEncoder()
 
 	if (avcodec_parameters_from_context(outStream->codecpar, videoEncoderContext) < 0) // Eseguo check
 	{
-		std::cout << "\nUnable to set the parameter of the codec";
-		exit(1);
+		throw std::runtime_error("\nUnable to set the parameter of the codec");
 	}
 
 	//outStream->time_base = { 1, 30 };
@@ -223,31 +234,27 @@ int VideoCapture::initializeEncoder()
 	if (!(outputFormatContext->flags & AVFMT_NOFILE)) {
 		//PB: I/O context
 		if (avio_open2(&outputFormatContext->pb, outputFileName.c_str(), AVIO_FLAG_WRITE, NULL, NULL) < 0) {
-			std::cout << "Could not open output file " << outputFileName << std::endl;
-			exit(2);
+			throw std::runtime_error("Could not open output file " + outputFileName );
 		}
 	}
 
 	//Effettuo un check sul numero di stream
 	if (!outputFormatContext->nb_streams)
 	{ 
-		std::cout << "\nOutput file dose not contain any stream";
-		exit(1);
+		throw std::runtime_error("\nOutput file dose not contain any stream");
 	}
 
 	// Scrivo l'header sul formatContext di output
 	if (avformat_write_header(outputFormatContext, &options) < 0) {
-		fprintf(stderr, "Error occurred when writing header file\n");
-		exit(2);
+		throw std::runtime_error("Error occurred when writing header file\n");
 	}
 
 	// Stampo le informazioni del output format context
 	av_dump_format(outputFormatContext, 0, this->outputFileName.c_str(), 1);
-	return 0;
+
 }
 
-
-int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, std::condition_variable& cv,int& stopRecording) {
+void VideoRecorder::startCapturing(int n_frame) {
 
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
@@ -264,14 +271,12 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 	uint8_t* video_outbuf = (uint8_t*)av_malloc(nbytes);
 	if (!video_outbuf)
 	{
-		std::cout << "\nUnable to allocate memory";
-		exit(1);
+		throw std::runtime_error("\nUnable to allocate memory");
 	}
 
 	if (av_image_fill_arrays(outFrame->data, outFrame->linesize, video_outbuf, AV_PIX_FMT_YUV420P, videoEncoderContext->width, videoEncoderContext->height, 1) < 0) //Verifico che non ci siano errori
 	{
-		std::cout << "\nError in filling image array";
-		exit(1);
+		throw std::runtime_error("\nError in filling image array");
 	}
 
 
@@ -279,15 +284,13 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 
 	if (!(swsCtx_ = sws_alloc_context()))
 	{
-		std::cout << "\nError nell'allocazione del SwsContext";
-		exit(1);
+		throw std::runtime_error("\nError nell'allocazione del SwsContext");
 	}
 
 
 	if (sws_init_context(swsCtx_, NULL, NULL) < 0)
 	{
-		std::cout << "\nError nell'inizializzazione del SwsContext";
-		exit(1);
+		throw std::runtime_error("\nError nell'inizializzazione del SwsContext");
 	}
 
 	swsCtx_ = sws_getCachedContext(swsCtx_,
@@ -307,11 +310,9 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
 	while (fn++ < n_frame) {
 
-		cv.wait(ul, [& stopRecording]() {return stopRecording == 1; });
-
+		
 		if (av_read_frame(inputFormatContext, inPacket) < 0) {
-			std::cout << "Error on reading packet" << std::endl;
-			return -1;
+			throw std::runtime_error("Error on reading packet");
 		}
 
 		/*if (fn == 50) {
@@ -325,29 +326,24 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 			// Letto il pacchetto(=frame compresso) lo mandiamo al decoder attraverso
 			// il codecContext
 			if (avcodec_send_packet(videoDecoderContext, inPacket) < 0) {
-				std::cout << "Error on sending packet";
-				exit(1);
+				throw std::runtime_error("Error on sending packet");
 			}
 			//std::cout << "In packet size: " << inPacket->size << std::endl;
 			int value = avcodec_receive_frame(videoDecoderContext, inFrame);
 
 			if (value == AVERROR(EAGAIN) || value == AVERROR_EOF) {
-				std::cout << "\nOutput not available in this state.  Try to send new input. ";
-				exit(1);
+				throw std::runtime_error("\nOutput not available in this state.  Try to send new input.");
 			}
 			else if (value < 0)
 			{
-				std::cout << "\nError during decoding";
-				exit(1);
+				throw std::runtime_error("\nError during decoding");
 			}
 			std::cout << "Input frame Number: " << videoDecoderContext->frame_number << std::endl;
 			//std::cout << "In frame linesize: " << inFrame->linesize << std::endl;
 
 			value = sws_scale(swsCtx_, inFrame->data, inFrame->linesize, 0, videoDecoderContext->height, outFrame->data, outFrame->linesize);
 			if (value < 0) {
-				std::cout << "\nProblem with sws_scale ";
-				//break;
-				exit(1);
+				throw std::runtime_error("\nProblem with sws_scale");
 			}
 
 	
@@ -361,8 +357,7 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 
 			value = avcodec_send_frame(videoEncoderContext, outFrame);
 			if (value < 0) {
-				std::cout << "Error in sending frame" << std::endl;
-				return -1;
+				throw std::runtime_error("Error in sending frame");
 			}
 			value = avcodec_receive_packet(videoEncoderContext, outPacket);
 			if (value == AVERROR(EAGAIN)) {
@@ -371,8 +366,7 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 			}
 			else if (value < 0 && value != AVERROR_EOF)
 			{
-				std::cout << "\nError during encoding";
-				exit(1);
+				throw std::runtime_error("\nError during encoding");
 			}
 			//std::cout << "Out packet size: " << outPacket->size << std::endl;
 
@@ -401,15 +395,13 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 			}
 
 		}
-		//ul.unlock();
 		av_packet_unref(outPacket);
 	}
 
 
 	if (av_write_trailer(outputFormatContext) < 0)
 	{
-		std::cout << "\nError in writing av trailer";
-		exit(1);
+		throw std::runtime_error("\nError in writing av trailer");
 	}
 
 	// TODO: memory leakage potrebbe finire prima di liberare queste risorse
@@ -418,7 +410,4 @@ int VideoCapture::startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, 
 	av_packet_free(&inPacket);
 	av_frame_free(&inFrame);
 
-	return 0;
-
 }
-

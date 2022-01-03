@@ -62,7 +62,7 @@ enum StreamType
 	AUDIO
 };
 
-class VideoCapture
+class VideoRecorder
 {
 	std::string outputFileName;
 	std::string inputFileName;
@@ -82,21 +82,32 @@ class VideoCapture
 	AVDictionary* options = nullptr;
 
 	// Capture Options
+	std::string failReason;
 	std::string framerate;
 	std::string offset_x;
 	std::string offset_y;
 	Resolution res;
 
-	std::vector<int> stream_index;	
+	std::vector<int> stream_index;
+
+	std::thread *t_capturer;
+
 	bool audioOn;
+
+	int num_frame;
 
 public:
 
-	VideoCapture(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y);
-	~VideoCapture();
+	VideoRecorder(std::string outputFileName, int n_frame, std::string framerate, Resolution res, std::string offset_x, std::string offset_y);
+	~VideoRecorder();
 	
-	int intilizeDecoder();
-	int initializeEncoder();
-	int startCapturing(int n_frame, std::unique_lock<std::mutex>& ul, std::condition_variable& cv, int& stopRecording);
+	void Open();
+	void Start();
+
+	void intilizeDecoder();
+	void initializeEncoder();
+	void startCapturing(int n_frame);
+
+	std::string getFailReason() { return this->failReason; }
 
 };
