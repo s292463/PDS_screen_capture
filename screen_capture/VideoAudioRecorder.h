@@ -2,6 +2,8 @@
 #include "AudioRecorder.h"
 #include "ffmpeg.h"
 #include <thread>
+#include <mutex>
+#include <atomic>
 
 #pragma once
 class VideoAudioRecorder
@@ -15,27 +17,92 @@ class VideoAudioRecorder
 	std::thread* audio_thread;
 	std::thread* video_thread;
 
+	std::mutex m;
+	std::condition_variable cv;
+
+	std::string failReason;
+
+	std::atomic_bool isRun;
+
+	bool audio;
+
+
+
 
 public:
 	// costruttore
-	VideoAudioRecorder(std::string outputFileName, int n_frame, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, int audio):
-		outputFileName(outputFileName) 
+	VideoAudioRecorder(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, bool audio) :
+		outputFileName(outputFileName), failReason(""),audio(audio), isRun(true)
 	{
-		video_recorder = new VideoRecorder{ outputFileName, n_frame, framerate, res, offset_x, offset_y };
+		video_recorder = new VideoRecorder{ outputFileName,  framerate, res, offset_x, offset_y, &isRun};
 		if (audio) {
-			audio_recorder = new AudioRecorder{ outputFileName,"" };
+			audio_recorder = new AudioRecorder{ outputFileName, "", &isRun };
 		}
 	}
-		
+	
+	~VideoAudioRecorder() {
+
+
+		Stop();
+
+		if (audio) delete audio_thread;
+		delete video_thread;
+
+		avformat_free_context(outputFormatContext);
+
+		if (audio) delete audio_recorder;
+		delete video_recorder;
+
+
+
+	}
 
 	void Open() {
 		video_recorder->Open();
-		audio_recorder->Open();
+		if(this->audio)
+			audio_recorder->Open();
 
 	}
 
-	void start() {
+	void Start() {
 
+		video_thread = new std::thread{
+			[this]() {
+				try {
+				this->video_recorder->startCapturing(this->m, this->cv);
+				}
+				catch (std::exception& e) {
+					this->failReason = e.what();
+}
+			}
+		};
+
+		if (this->audio) {
+			audio_thread = new std::thread{
+				[this]() {
+					try {
+					this->audio_recorder->StartEncode(this->m, this->cv);
+					}
+					catch (std::exception& e) {
+						this->failReason = e.what();
+					}
+				}
+			};
+		}
+		
+	}
+
+	void Stop() {
+		bool r = isRun.exchange(false);
+		if (!r) return; //avoid run twice
+
+		this->video_thread->join();
+		this->audio_thread->join();
+
+		int ret = av_write_trailer(this->outputFormatContext);
+		if (ret < 0) throw std::runtime_error("can not write file trailer.");
+		avio_close(outputFormatContext->pb);
+		
 	}
 
 	int outputInit() {
@@ -73,8 +140,8 @@ public:
 		// istruzione successiva in AudioRecorder->Open
 		//const AVCodec* audioOutCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
 
-
-		audio_recorder->initializeEncoder(outputFormatContext);
+		if(audio)
+			audio_recorder->initializeEncoder(outputFormatContext);
 
 		// istruzione precedente in in AudioRecorder->Open
 		//avcodec_parameters_from_context(audioOutStream->codecpar, audioOutCodecCtx);
@@ -89,6 +156,6 @@ public:
 
 	}
 
-
+	std::string getFailureReason() { return this->failReason; }
 };
 

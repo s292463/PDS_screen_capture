@@ -9,6 +9,7 @@
 #include <string>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
 
 //#ifdef __linux__
 #include <atomic>
@@ -35,26 +36,33 @@ private:
     AVStream        *audioOutStream;
     AVCodecContext  *audioOutCodecCtx;
 
-    std::atomic_bool     isRun;
+    std::atomic_bool     *isRun;
     std::thread         *audioThread;
 
-    void StartEncode();
-
-
+    
 
 public:
 
-    AudioRecorder(string filepath, string device)
-            :outfile(filepath),deviceName(device),failReason(""),isRun(false){}
+    AudioRecorder(string filepath, string device, std::atomic_bool* isRun)
+            :outfile(filepath),deviceName(device),failReason(""), isRun(isRun)
+    {}
 
-    void Open();
-    void Start();
-    void Stop();
-    void initializeEncoder(AVFormatContext* outputFormatContext);
+    
 
     ~AudioRecorder() {
-        Stop();
+        swr_free(&audioConverter);
+        av_audio_fifo_free(audioFifo);
+
+        avcodec_free_context(&audioInCodecCtx);
+        avcodec_free_context(&audioOutCodecCtx);
+
+        avformat_close_input(&audioInFormatCtx);
+        puts("Stop record."); fflush(stdout);
     }
+
+    void Open();
+    void StartEncode(std::mutex& m, std::condition_variable& cv);
+    void initializeEncoder(AVFormatContext* outputFormatContext);
 
     std::string GetLastError() { return failReason; }
 };

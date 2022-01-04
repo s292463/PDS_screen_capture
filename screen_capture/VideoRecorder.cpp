@@ -1,18 +1,19 @@
 #include "VideoRecorder.h"
+#include <atomic>
 
 
 // CONSTRUCTOR AND DISTRUCTOR =================================================
-VideoRecorder::VideoRecorder(std::string outputFileName, int n_frame, std::string framerate, Resolution res, std::string offset_x, std::string offset_y):
+VideoRecorder::VideoRecorder(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, std::atomic_bool* isRun):
 	outputFileName(outputFileName),
 	inputFileName("gdigrab"),
-	num_frame(n_frame),
 	audioOn(true),
 	framerate(framerate),
 	res(res),
 	offset_x{ offset_x },
 	offset_y{ offset_y },
 	stream_index{ 0,0 },
-	failReason("")
+	failReason(""),
+	isRun(isRun)
 {
 	avdevice_register_all(); // It's not thread safe
 }
@@ -49,23 +50,28 @@ void VideoRecorder::Open() {
 	intilizeDecoder();
 }
 
-void VideoRecorder::Start() {
+//void VideoRecorder::Start() {
+//
+//	t_capturer = new std::thread{
+//		[this]() {
+//			try {
+//				this->startCapturing(this->num_frame);
+//			}
+//			catch (std::exception& e) {
+//				this->failReason = e.what();
+//			}
+//
+//		}
+//	};
+//
+//	t_capturer->join();
+//
+//}
 
-	t_capturer = new std::thread{
-		[this]() {
-			try {
-				this->startCapturing(this->num_frame);
-			}
-			catch (std::exception& e) {
-				this->failReason = e.what();
-			}
-
-		}
-	};
-
-	t_capturer->join();
-
-}
+//void VideoRecorder::Stop() {
+//
+//	if (!this->isRun) return; //avoid run twice
+//}
 
 void VideoRecorder::intilizeDecoder() {
 
@@ -221,7 +227,7 @@ void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 
 }
 
-void VideoRecorder::startCapturing(int n_frame) {
+void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
 
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
@@ -273,11 +279,11 @@ void VideoRecorder::startCapturing(int n_frame) {
 
 
 	int fn = 0;
-
+	while (*isRun)
+	{
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
-	while (fn++ < n_frame) {
 
-		
+
 		if (av_read_frame(inputFormatContext, inPacket) < 0) {
 			throw std::runtime_error("Error on reading packet");
 		}
@@ -313,7 +319,7 @@ void VideoRecorder::startCapturing(int n_frame) {
 				throw std::runtime_error("\nProblem with sws_scale");
 			}
 
-	
+
 			outPacket->data = nullptr;    // i dati del pacchetto verranno allocati dall'encoder
 			outPacket->size = 0;
 
@@ -355,17 +361,25 @@ void VideoRecorder::startCapturing(int n_frame) {
 				if (outPacket->dts != AV_NOPTS_VALUE)
 					outPacket->dts = av_rescale_q(outPacket->dts, videoEncoderContext->time_base, outStream->time_base);
 
+
+				// Critic section
+				std::unique_lock ul(m);
+				//cv.wait(ul);
+
 				if (av_interleaved_write_frame(outputFormatContext, outPacket) < 0) {
 					std::cout << "Error muxing packet" << std::endl;
 					break;
 				}
+
+				ul.unlock();
+				//cv.notify_one();
 			}
 
 		}
 		av_packet_unref(outPacket);
-	}
+	
 
-
+}
 	if (av_write_trailer(outputFormatContext) < 0)
 	{
 		throw std::runtime_error("\nError in writing av trailer");

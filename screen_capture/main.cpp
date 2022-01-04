@@ -1,15 +1,17 @@
-#include "VideoRecorder.h"
+#include "VideoAudioRecorder.h"
 #include <iostream>
 #include <thread>
 #include <condition_variable>
 #include <mutex>
 
 
-int main() {
 
-	std::condition_variable cv;
-	std::mutex m;
-	std::unique_lock<std::mutex> ul{ m };
+using namespace std;
+
+
+int main() {
+    puts("==== Audio Recorder ====");
+    avdevice_register_all();
 
 	bool closeProgram = false;
 	int stopRecording = 0;
@@ -24,66 +26,36 @@ int main() {
 	std::string offset_x = "0";
 	std::string offset_y = "0";
 	std::string framerate = "15";
+	bool audio = true;
 
-	VideoRecorder* capturer = new VideoRecorder{ outputFileName, n_frame, framerate, fullHD, offset_x, offset_y };
-
-
-	while (!closeProgram) {
-		try {
-			std::cout << "Welcome to screen capturer" << std::endl;
-
-			capturer->Open();
-			capturer->Start();
-
-			auto programFailureReason = capturer->getFailReason();
-			if (!programFailureReason.empty())
-				throw std::runtime_error(programFailureReason);
-
-		}
-		catch (std::exception& e) {
-			fprintf(stderr, "[ERROR] %s\n", e.what());
-			exit(-1);
-		}
-		closeProgram = true;
-	}
+	VideoAudioRecorder* capturer = new VideoAudioRecorder{ outputFileName, framerate, fullHD, offset_x, offset_y, audio};
 	
 
+	
+	try {
+		std::cout << "Welcome to screen capturer" << std::endl;
+
+		capturer->Open();
+		capturer->outputInit();
+		capturer->Start();
+
+		auto programFailureReason = capturer->getFailureReason();
+		if (!programFailureReason.empty())
+			throw std::runtime_error(programFailureReason);
+
+		std::this_thread::sleep_for(20s);
+		
+		capturer->Stop();
+
+	}
+	catch (std::exception& e) {
+		fprintf(stderr, "[ERROR] %s\n", e.what());
+		exit(-1);
+	}
+		
 	delete capturer;
-
-	return 0;
-}
-
-
-#include "AudioRecorder.h"
-#include <string>
-
-using namespace std;
-
-int main0() {
-    puts("==== Audio Recorder ====");
-    avdevice_register_all();
-
-    AudioRecorder recorder{ "C:/Users/chris/Desktop/testAudio.aac","" };
-    try {
-        recorder.Open();
-        recorder.Start();
-
-        //record 10 seconds.
-        std::this_thread::sleep_for(10s);
-
-        recorder.Stop();
-        string reason = recorder.GetLastError();
-        if (!reason.empty()) {
-            throw std::runtime_error(reason);
-        }
-    }
-    catch (std::exception& e) {
-        fprintf(stderr, "[ERROR] %s\n", e.what());
-        exit(-1);
-    }
 
     puts("END");
     return 0;
 }
-
  

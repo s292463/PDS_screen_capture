@@ -1,4 +1,8 @@
 #include "AudioRecorder.h"
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 #ifdef __linux__
 #include <assert.h>
 #endif
@@ -114,42 +118,7 @@ void AudioRecorder::initializeEncoder(AVFormatContext* outputFormatContext) {
 
 }
 
-void AudioRecorder::Start()
-{
-    audioThread = new std::thread([this]() {
-        this->isRun = true;
-        puts("Start record."); fflush(stdout);
-        try {
-            this->StartEncode();
-        }
-        catch (std::exception e) {
-            this->failReason = e.what();
-        }
-    });
-}
-
-void AudioRecorder::Stop()
-{
-    bool r = isRun.exchange(false);
-    if (!r) return; //avoid run twice
-    audioThread->join();
-
-    int ret = av_write_trailer(audioOutFormatCtx);
-    if (ret < 0) throw std::runtime_error("can not write file trailer.");
-    avio_close(audioOutFormatCtx->pb);
-
-    swr_free(&audioConverter);
-    av_audio_fifo_free(audioFifo);
-
-    avcodec_free_context(&audioInCodecCtx);
-    avcodec_free_context(&audioOutCodecCtx);
-    
-    avformat_close_input(&audioInFormatCtx);
-	avformat_free_context(audioOutFormatCtx);
-    puts("Stop record."); fflush(stdout);
-}
-
-void AudioRecorder::StartEncode()
+void AudioRecorder::StartEncode(std::mutex& m, std::condition_variable& cv)
 {
     AVFrame *inputFrame = av_frame_alloc();
     AVPacket *inputPacket = av_packet_alloc();
@@ -159,7 +128,7 @@ void AudioRecorder::StartEncode()
 
     int ret;
 
-    while (isRun) {
+    while (*isRun) {
         int size1 = av_audio_fifo_size(audioFifo);
         //  decoding
         ret = av_read_frame(audioInFormatCtx, inputPacket);
@@ -238,13 +207,19 @@ void AudioRecorder::StartEncode()
 
             frameCount++;
 
-            ret = av_write_frame(audioOutFormatCtx, outputPacket);
+
+            // Critic section
+            std::unique_lock ul(m);
+            //cv.wait(ul);
+
+            ret = av_interleaved_write_frame(audioOutFormatCtx, outputPacket);
+
+            ul.unlock();
+            //cv.notify_one();
+
             av_packet_unref(outputPacket);
 
         }
-
-
-
     }
 
     av_packet_free(&inputPacket);

@@ -40,6 +40,7 @@ extern "C"
 #include <vector>
 #include <cstring>
 #include <condition_variable>
+#include <atomic>
 
 
 enum Options
@@ -91,6 +92,7 @@ class VideoRecorder
 	std::vector<int> stream_index;
 
 	std::thread *t_capturer;
+	std::atomic_bool* isRun;
 
 	bool audioOn;
 
@@ -98,15 +100,16 @@ class VideoRecorder
 
 public:
 
-	VideoRecorder(std::string outputFileName, int n_frame, std::string framerate, Resolution res, std::string offset_x, std::string offset_y);
+	VideoRecorder(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, std::atomic_bool* isRun);
 	~VideoRecorder();
 	
 	void Open();
 	void Start();
+	void Stop();
 
 	void intilizeDecoder();
 	void initializeEncoder(AVFormatContext* outputFormatContext);
-	void startCapturing(int n_frame);
+	void startCapturing(std::mutex& m, std::condition_variable& cv);
 
 	std::string getFailReason() { return this->failReason; }
 
