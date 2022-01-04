@@ -50,6 +50,7 @@ public:
     void Open();
     void Start();
     void Stop();
+    void initializeEncoder(AVFormatContext* outputFormatContext);
 
     ~AudioRecorder() {
         Stop();

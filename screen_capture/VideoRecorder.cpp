@@ -46,9 +46,7 @@ VideoRecorder::~VideoRecorder() {
 // FUNCTIONS ===============================================================
 
 void VideoRecorder::Open() {
-
 	intilizeDecoder();
-	initializeEncoder();
 }
 
 void VideoRecorder::Start() {
@@ -153,25 +151,11 @@ void VideoRecorder::intilizeDecoder() {
 
 }
 
-void VideoRecorder::initializeEncoder()
+void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 {
-	// Alloco il format context di output
-	if (avformat_alloc_output_context2(&outputFormatContext, NULL, NULL, outputFileName.c_str()) < 0) {
-		throw std::runtime_error("Can't open output context");
-	}
-
-	if (!outputFormatContext) //Effettuo un check
-	{
-		throw std::runtime_error("\nError in allocating av format output context");
-	}
-
-	// Cerca un formato che mecci il formato di output. Ritorna NULL se non ne trova uno
-	if (!av_guess_format(NULL, this->outputFileName.c_str(), NULL)) //Effettuo un check
-	{
-		throw std::runtime_error("\nError in guessing the video format. try with correct format");
-	}
-
-
+	this->outputFormatContext = outputFormatContext;
+	
+	//-------------------encoder------------------------------
 	videoEncoder = avcodec_find_encoder(AV_CODEC_ID_MPEG4);
 	if (!videoEncoder) // Eseguo check
 	{
@@ -198,13 +182,14 @@ void VideoRecorder::initializeEncoder()
 	//videoEncoderContext->bit_rate = 400000;
 
 
-
-
 	if (avcodec_open2(videoEncoderContext, videoEncoder, nullptr) < 0) //Effettuo un check
 	{
 		throw std::runtime_error("\nError in opening the Encoder");
 	}
 
+	//------------------------------------------------------------------------------------
+	
+	// associo uno stream video all'outputFormatContext
 	outStream = avformat_new_stream(outputFormatContext, videoEncoder);
 	if (!outStream) {
 		throw std::runtime_error("Failed allocating output stream\n");
@@ -228,29 +213,11 @@ void VideoRecorder::initializeEncoder()
 		videoEncoderContext->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 	}
 
-
-
-	//Creo il file di output
-	if (!(outputFormatContext->flags & AVFMT_NOFILE)) {
-		//PB: I/O context
-		if (avio_open2(&outputFormatContext->pb, outputFileName.c_str(), AVIO_FLAG_WRITE, NULL, NULL) < 0) {
-			throw std::runtime_error("Could not open output file " + outputFileName );
-		}
-	}
-
 	//Effettuo un check sul numero di stream
 	if (!outputFormatContext->nb_streams)
-	{ 
+	{
 		throw std::runtime_error("\nOutput file dose not contain any stream");
 	}
-
-	// Scrivo l'header sul formatContext di output
-	if (avformat_write_header(outputFormatContext, &options) < 0) {
-		throw std::runtime_error("Error occurred when writing header file\n");
-	}
-
-	// Stampo le informazioni del output format context
-	av_dump_format(outputFormatContext, 0, this->outputFileName.c_str(), 1);
 
 }
 

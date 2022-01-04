@@ -75,23 +75,16 @@ void AudioRecorder::Open()
     audioFifo = av_audio_fifo_alloc(requireAudioFmt, audioInCodecCtx->channels,
                                     audioInCodecCtx->sample_rate * 2);
 
+}
 
-    //--------------------------------------------------------------------------
-    // output context
+void AudioRecorder::initializeEncoder(AVFormatContext* outputFormatContext) {
 
-    // ADTS(Audio Data Transport Stream)
-    ret = avformat_alloc_output_context2(&audioOutFormatCtx, NULL, "adts", NULL);
-    if (ret < 0) {
-        throw std::runtime_error("Failed to alloc ouput context");
+    this->audioOutFormatCtx = outputFormatContext;
+
+    const AVCodec* audioOutCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    if (!audioOutCodec) {
+        throw std::runtime_error("Fail to find aac encoder. Please check your DLL.");
     }
-
-    ret = avio_open(&audioOutFormatCtx->pb, outfile.c_str(), AVIO_FLAG_WRITE);
-    if (ret < 0) {
-        throw std::runtime_error("Fail to open output file.");
-    }
-
-    const AVCodec *audioOutCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
-    if (!audioOutCodec) throw std::runtime_error("Fail to find aac encoder. Please check your DLL.");
 
     audioOutCodecCtx = avcodec_alloc_context3(audioOutCodec);
     audioOutCodecCtx->channels = audioInStream->codecpar->channels;
@@ -119,11 +112,6 @@ void AudioRecorder::Open()
     }
     avcodec_parameters_from_context(audioOutStream->codecpar, audioOutCodecCtx);
 
-    // write file header
-    if (avformat_write_header(audioOutFormatCtx, NULL) < 0)
-    {
-        throw std::runtime_error("Fail to write header for audio.");
-    }
 }
 
 void AudioRecorder::Start()
@@ -172,7 +160,7 @@ void AudioRecorder::StartEncode()
     int ret;
 
     while (isRun) {
-
+        int size1 = av_audio_fifo_size(audioFifo);
         //  decoding
         ret = av_read_frame(audioInFormatCtx, inputPacket);
         if (ret < 0) {
@@ -212,8 +200,11 @@ void AudioRecorder::StartEncode()
         av_frame_unref(inputFrame);
         av_packet_unref(inputPacket);
 
+        int size = av_audio_fifo_size(audioFifo);
+        // frame_size -> n di sample in un frame audio
         while (av_audio_fifo_size(audioFifo) >= audioOutCodecCtx->frame_size) {
             AVFrame* outputFrame = av_frame_alloc();
+            int size1 = av_audio_fifo_size(audioFifo);
             outputFrame->nb_samples = audioOutCodecCtx->frame_size;
             outputFrame->channels = audioInCodecCtx->channels;
             outputFrame->channel_layout = av_get_default_channel_layout(audioInCodecCtx->channels);

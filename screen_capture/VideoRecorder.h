@@ -105,7 +105,7 @@ public:
 	void Start();
 
 	void intilizeDecoder();
-	void initializeEncoder();
+	void initializeEncoder(AVFormatContext* outputFormatContext);
 	void startCapturing(int n_frame);
 
 	std::string getFailReason() { return this->failReason; }
