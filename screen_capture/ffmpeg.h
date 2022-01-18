@@ -1,5 +1,4 @@
 //
-// Created by 原照萌 on 2019-05-08.
 //
 
 #ifndef AUDIORECORDER_FFMPEG_H

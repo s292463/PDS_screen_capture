@@ -61,7 +61,7 @@ public:
     }
 
     void Open();
-    void StartEncode(std::mutex& m, std::condition_variable& cv);
+    void StartEncode(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped);
     void initializeEncoder(AVFormatContext* outputFormatContext);
 
     std::string GetLastError() { return failReason; }

@@ -41,6 +41,8 @@ extern "C"
 #include <cstring>
 #include <condition_variable>
 #include <atomic>
+#include <utility>
+
 
 
 enum Options
@@ -51,11 +53,6 @@ enum Options
 	AUDIO_ON_OFF
 };
 
-typedef struct {
-	std::string width;
-	std::string height;
-
-}Resolution;
 
 enum StreamType
 {
@@ -85,9 +82,8 @@ class VideoRecorder
 	// Capture Options
 	std::string failReason;
 	std::string framerate;
-	std::string offset_x;
-	std::string offset_y;
-	Resolution res;
+	std::pair<std::string, std::string> offset;
+	std::pair<std::string, std::string> res;
 
 	std::vector<int> stream_index;
 
@@ -100,7 +96,7 @@ class VideoRecorder
 
 public:
 
-	VideoRecorder(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, std::atomic_bool* isRun);
+	VideoRecorder(std::string outputFileName, std::string framerate, std::pair<std::string, std::string> offset, std::pair<std::string, std::string> resolution, std::atomic_bool* isRun);
 	~VideoRecorder();
 	
 	void Open();
@@ -109,7 +105,7 @@ public:
 
 	void intilizeDecoder();
 	void initializeEncoder(AVFormatContext* outputFormatContext);
-	void startCapturing(std::mutex& m, std::condition_variable& cv);
+	void startCapturing(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped);
 
 	std::string getFailReason() { return this->failReason; }
 

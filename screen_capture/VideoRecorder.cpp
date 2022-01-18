@@ -1,16 +1,16 @@
 #include "VideoRecorder.h"
 #include <atomic>
+#include <utility>
 
 
 // CONSTRUCTOR AND DISTRUCTOR =================================================
-VideoRecorder::VideoRecorder(std::string outputFileName, std::string framerate, Resolution res, std::string offset_x, std::string offset_y, std::atomic_bool* isRun):
+VideoRecorder::VideoRecorder(std::string outputFileName, std::string framerate, std::pair<std::string, std::string> offset, std::pair<std::string, std::string> resolution, std::atomic_bool* isRun):
 	outputFileName(outputFileName),
 	inputFileName("gdigrab"),
 	audioOn(true),
 	framerate(framerate),
-	res(res),
-	offset_x{ offset_x },
-	offset_y{ offset_y },
+	res(resolution),
+	offset{ offset },
 	stream_index{ 0,0 },
 	failReason(""),
 	isRun(isRun)
@@ -20,18 +20,10 @@ VideoRecorder::VideoRecorder(std::string outputFileName, std::string framerate, 
 
 VideoRecorder::~VideoRecorder() {
 
+
 	// Close format context input
 	if (inputFormatContext)
 		avformat_close_input(&inputFormatContext);
-
-	if (outputFormatContext && !(outputFormatContext->oformat->flags & AVFMT_NOFILE))
-	{
-		avio_close(outputFormatContext->pb);
-	}
-
-	if (outputFormatContext)
-		avformat_free_context(outputFormatContext);
-
 
 	// Close codec Context
 	if (videoEncoderContext) {
@@ -83,9 +75,9 @@ void VideoRecorder::intilizeDecoder() {
 	// Option dictionary
 	av_dict_set(&options, "framerate", this->framerate.c_str(), 0);
 	av_dict_set(&options, "preset", "medium", 0);
-	av_dict_set(&options, "offset_x", this->offset_x.c_str(), 0);
-	av_dict_set(&options, "offset_y", this->offset_y.c_str(), 0);
-	av_dict_set(&options, "video_size", (this->res.width + "x" + this->res.height).c_str(), 0);
+	av_dict_set(&options, "offset_x", this->offset.first.c_str(), 0);
+	av_dict_set(&options, "offset_y", this->offset.second.c_str(), 0);
+	av_dict_set(&options, "video_size", (this->res.first + "x" + this->res.second).c_str(), 0);
 	av_dict_set(&options, "probesize", "20M", 0);
 
 
@@ -227,7 +219,7 @@ void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 
 }
 
-void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
+void VideoRecorder::startCapturing(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped) {
 
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
@@ -279,19 +271,16 @@ void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
 
 
 	int fn = 0;
-	while (*isRun)
+	while (isRun->load())
 	{
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
 
+		std::unique_lock s_ul{ s_m };
+		s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
 		if (av_read_frame(inputFormatContext, inPacket) < 0) {
 			throw std::runtime_error("Error on reading packet");
 		}
-
-		/*if (fn == 50) {
-			std::chrono::milliseconds timespan(5000);
-			std::this_thread::sleep_for(timespan);
-		}*/
 
 		// Poiche' il formatContext e' uno solo dobbiamo distinguere noi da quale
 		// stream arriva il paccketto in modo da processarlo correttamente
@@ -311,7 +300,7 @@ void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
 			{
 				throw std::runtime_error("\nError during decoding");
 			}
-			std::cout << "Input frame Number: " << videoDecoderContext->frame_number << std::endl;
+			//std::cout << "Input frame Number: " << videoDecoderContext->frame_number << std::endl;
 			//std::cout << "In frame linesize: " << inFrame->linesize << std::endl;
 
 			value = sws_scale(swsCtx_, inFrame->data, inFrame->linesize, 0, videoDecoderContext->height, outFrame->data, outFrame->linesize);
@@ -346,7 +335,7 @@ void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
 
 			if (value >= 0) {
 
-				std::cout << "\rFrame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
+				//std::cout << "\rFrame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
 
 				//outPacket->stream_index = video_stream_index;
 				//outPacket->duration = outStream->time_base.den / outStream->time_base.num / inStream->avg_frame_rate.num * inStream->avg_frame_rate.den;
@@ -363,7 +352,7 @@ void VideoRecorder::startCapturing(std::mutex& m, std::condition_variable& cv) {
 
 
 				// Critic section
-				std::unique_lock ul(m);
+				std::unique_lock ul(w_m);
 				//cv.wait(ul);
 
 				if (av_interleaved_write_frame(outputFormatContext, outPacket) < 0) {

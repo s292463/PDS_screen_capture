@@ -118,7 +118,7 @@ void AudioRecorder::initializeEncoder(AVFormatContext* outputFormatContext) {
 
 }
 
-void AudioRecorder::StartEncode(std::mutex& m, std::condition_variable& cv)
+void AudioRecorder::StartEncode(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped)
 {
     AVFrame *inputFrame = av_frame_alloc();
     AVPacket *inputPacket = av_packet_alloc();
@@ -127,9 +127,11 @@ void AudioRecorder::StartEncode(std::mutex& m, std::condition_variable& cv)
     uint64_t  frameCount = 0;
 
     int ret;
+    std::mutex test_mutex;
+    while (isRun->load()) {
+        std::unique_lock s_ul{ test_mutex };
+        s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
-    while (*isRun) {
-        int size1 = av_audio_fifo_size(audioFifo);
         //  decoding
         ret = av_read_frame(audioInFormatCtx, inputPacket);
         if (ret < 0) {
@@ -169,11 +171,9 @@ void AudioRecorder::StartEncode(std::mutex& m, std::condition_variable& cv)
         av_frame_unref(inputFrame);
         av_packet_unref(inputPacket);
 
-        int size = av_audio_fifo_size(audioFifo);
         // frame_size -> n di sample in un frame audio
         while (av_audio_fifo_size(audioFifo) >= audioOutCodecCtx->frame_size) {
             AVFrame* outputFrame = av_frame_alloc();
-            int size1 = av_audio_fifo_size(audioFifo);
             outputFrame->nb_samples = audioOutCodecCtx->frame_size;
             outputFrame->channels = audioInCodecCtx->channels;
             outputFrame->channel_layout = av_get_default_channel_layout(audioInCodecCtx->channels);
@@ -209,14 +209,12 @@ void AudioRecorder::StartEncode(std::mutex& m, std::condition_variable& cv)
 
 
             // Critic section
-            std::unique_lock ul(m);
-            //cv.wait(ul);
+            std::unique_lock ul(w_m);
 
             ret = av_interleaved_write_frame(audioOutFormatCtx, outputPacket);
 
             ul.unlock();
-            //cv.notify_one();
-
+            // End of Critic section
             av_packet_unref(outputPacket);
 
         }

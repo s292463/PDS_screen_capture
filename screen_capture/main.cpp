@@ -3,35 +3,28 @@
 #include <thread>
 #include <condition_variable>
 #include <mutex>
-
-
+#include <utility>
 
 using namespace std;
 
-
 int main() {
-    puts("==== Audio Recorder ====");
-    avdevice_register_all();
+    std::puts("==== Audio Recorder ====");
+    //avdevice_register_all();
 
 	bool closeProgram = false;
-	int stopRecording = 0;
-	Resolution fullHD = { "1920", "1080" };
-	Resolution twoK = { "2560", "1440" };
-
-	int n_frame = 100;
+	char command = '\0';
 
 	//std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4";
 
 	std::string outputFileName = "C:/Users/chris/Desktop/output.mp4";
-	std::string offset_x = "0";
-	std::string offset_y = "0";
-	std::string framerate = "15";
+
 	bool audio = true;
 
-	VideoAudioRecorder* capturer = new VideoAudioRecorder{ outputFileName, framerate, fullHD, offset_x, offset_y, audio};
+	pair<int, int> p1 = {50,50}, p2 = {2000, 1000};
+
+	VideoAudioRecorder* capturer = new VideoAudioRecorder{outputFileName, p1, p2, audio};
 	
 
-	
 	try {
 		std::cout << "Welcome to screen capturer" << std::endl;
 
@@ -39,19 +32,45 @@ int main() {
 		capturer->outputInit();
 		capturer->Start();
 
-		auto programFailureReason = capturer->getFailureReason();
+		std::cout << "Capturing Started" << std::endl 
+				  << "Press 's' to stop and 'r' reactivate the recording,\n 'c' to close the program\n";
+
+
+		while (!closeProgram) {
+			std::cin >> command;
+
+			switch (command)
+			{
+			case's':
+				capturer->Pause();
+				break;
+			case'r':
+				capturer->Restart();
+				break;
+			case'c':
+				capturer->Stop();
+				closeProgram = true;
+				break;
+			default:
+				std::cout << "Not available command" << std::endl;
+				break;
+			}
+		}
+		/*auto programFailureReason = capturer->getFailureReason();
 		if (!programFailureReason.empty())
 			throw std::runtime_error(programFailureReason);
 
-		std::this_thread::sleep_for(20s);
+		std::this_thread::sleep_for(20s);*/
 		
-		capturer->Stop();
+		
 
 	}
 	catch (std::exception& e) {
 		fprintf(stderr, "[ERROR] %s\n", e.what());
 		exit(-1);
 	}
+
+	
 		
 	delete capturer;
 
@@ -59,3 +78,7 @@ int main() {
     return 0;
 }
  
+
+void parametersParser(char** argv) {
+
+}
