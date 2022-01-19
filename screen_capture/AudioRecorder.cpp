@@ -3,11 +3,26 @@
 #include <mutex>
 #include <condition_variable>
 
-#ifdef __linux__
-#include <assert.h>
-#endif
+//#ifdef __linux__
+//#include <assert.h>
+//#endif
 
 const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
+
+AudioRecorder::AudioRecorder(string filepath, string device, std::atomic_bool* isRun)
+    :outfile(filepath), deviceName(device), failReason(""), isRun(isRun)
+{}
+
+AudioRecorder::~AudioRecorder() {
+    swr_free(&audioConverter);
+    av_audio_fifo_free(audioFifo);
+
+    avcodec_free_context(&audioInCodecCtx);
+    avcodec_free_context(&audioOutCodecCtx);
+
+    avformat_close_input(&audioInFormatCtx);
+    puts("Stop record."); fflush(stdout);
+}
 
 void AudioRecorder::Open()
 {
@@ -16,11 +31,10 @@ void AudioRecorder::Open()
     audioInFormatCtx = nullptr;
     int ret;
 
-    //ref: https://ffmpeg.org/ffmpeg-devices.html
 #ifdef _WIN32
     if (deviceName == "") {
         deviceName = DS_GetDefaultDevice("a");
-            //"@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\\wave_{9FF96969-7CB9-458F-8407-EB85A9265599}";
+
         if (deviceName == "") {
             throw std::runtime_error("Fail to get default audio device, maybe no microphone.");
         }
@@ -118,7 +132,11 @@ void AudioRecorder::initializeEncoder(AVFormatContext* outputFormatContext) {
 
 }
 
-void AudioRecorder::StartEncode(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped)
+void AudioRecorder::Reopen() {
+    avformat_open_input(&this->audioInFormatCtx, this->deviceName.c_str(), av_find_input_format("dshow"), nullptr);
+}
+
+void AudioRecorder::StartEncode(std::mutex& write_mutex, std::condition_variable& s_cv, std::atomic_bool& isStopped)
 {
     AVFrame *inputFrame = av_frame_alloc();
     AVPacket *inputPacket = av_packet_alloc();
@@ -127,10 +145,9 @@ void AudioRecorder::StartEncode(std::mutex& w_m, std::mutex& s_m, std::condition
     uint64_t  frameCount = 0;
 
     int ret;
-    std::mutex test_mutex;
+    std::mutex stop_mutex;
+
     while (isRun->load()) {
-        std::unique_lock s_ul{ test_mutex };
-        s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
         //  decoding
         ret = av_read_frame(audioInFormatCtx, inputPacket);
@@ -209,13 +226,26 @@ void AudioRecorder::StartEncode(std::mutex& w_m, std::mutex& s_m, std::condition
 
 
             // Critic section
-            std::unique_lock ul(w_m);
+            std::unique_lock ul(write_mutex);
 
             ret = av_interleaved_write_frame(audioOutFormatCtx, outputPacket);
 
             ul.unlock();
             // End of Critic section
             av_packet_unref(outputPacket);
+
+            // Chiude l'audio prima di andare in pausa
+            // Se lo facessi nella funzione 'Pause' di "AudioVideoRecorder" 
+            // l'input format context dell'audio potrebbe essere chiuso prima di aver finito 
+            // di processare gli ultimi pacchetti
+            if (isStopped.load()) {
+                avformat_close_input(&this->audioInFormatCtx);
+            }
+
+            // Prima di riattivare il thread nella funzione 'Restart' di "AudioVideoRecorder"
+            // si riapre l' input format context dell'audio
+            std::unique_lock s_ul{ stop_mutex };
+            s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
         }
     }

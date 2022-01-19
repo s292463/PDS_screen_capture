@@ -170,8 +170,8 @@ void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 	//videoEncoderContext->codec_id = AV_CODEC_ID_MPEG4;
 	videoEncoderContext->pix_fmt = AV_PIX_FMT_YUV420P;
 	//videoEncoderContext->sample_aspect_ratio = videoDecoderContext->sample_aspect_ratio;
-	videoEncoderContext->height = std::stoi(this->res.height);// videoDecoderContext->height;
-	videoEncoderContext->width = std::stoi(this->res.width);// videoDecoderContext->width;
+	videoEncoderContext->height = std::stoi(this->res.second);// videoDecoderContext->height;
+	videoEncoderContext->width = std::stoi(this->res.first);// videoDecoderContext->width;
 	videoEncoderContext->gop_size = 3;
 	videoEncoderContext->max_b_frames = 2;
 	videoEncoderContext->time_base.num = 1;
@@ -219,7 +219,7 @@ void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 
 }
 
-void VideoRecorder::startCapturing(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped) {
+void VideoRecorder::startCapturing(std::mutex& write_mutex, std::condition_variable& s_cv, std::atomic_bool& isStopped) {
 
 	AVPacket* inPacket = av_packet_alloc();
 	if (!inPacket) { std::cout << "Error on allocating input Packet"; exit(1); }
@@ -271,12 +271,12 @@ void VideoRecorder::startCapturing(std::mutex& w_m, std::mutex& s_m, std::condit
 
 
 	int fn = 0;
+
+	std::mutex stop_mutex;
+
 	while (isRun->load())
 	{
 	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
-
-		std::unique_lock s_ul{ s_m };
-		s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
 		if (av_read_frame(inputFormatContext, inPacket) < 0) {
 			throw std::runtime_error("Error on reading packet");
@@ -352,8 +352,7 @@ void VideoRecorder::startCapturing(std::mutex& w_m, std::mutex& s_m, std::condit
 
 
 				// Critic section
-				std::unique_lock ul(w_m);
-				//cv.wait(ul);
+				std::unique_lock ul(write_mutex);
 
 				if (av_interleaved_write_frame(outputFormatContext, outPacket) < 0) {
 					std::cout << "Error muxing packet" << std::endl;
@@ -361,18 +360,21 @@ void VideoRecorder::startCapturing(std::mutex& w_m, std::mutex& s_m, std::condit
 				}
 
 				ul.unlock();
-				//cv.notify_one();
+				
 			}
+
+			std::unique_lock s_ul{ stop_mutex };
+			s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
 
 		}
 		av_packet_unref(outPacket);
 	
 
 }
-	if (av_write_trailer(outputFormatContext) < 0)
+	/*if (av_write_trailer(outputFormatContext) < 0)
 	{
 		throw std::runtime_error("\nError in writing av trailer");
-	}
+	}*/
 
 	// TODO: memory leakage potrebbe finire prima di liberare queste risorse
 	av_free(video_outbuf);

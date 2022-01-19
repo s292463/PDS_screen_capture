@@ -105,7 +105,7 @@ public:
 
 	void intilizeDecoder();
 	void initializeEncoder(AVFormatContext* outputFormatContext);
-	void startCapturing(std::mutex& w_m, std::mutex& s_m, std::condition_variable& s_cv, std::atomic_bool& isStopped);
+	void startCapturing(std::mutex& write_mutex, std::condition_variable& s_cv, std::atomic_bool& isStopped);
 
 	std::string getFailReason() { return this->failReason; }
 

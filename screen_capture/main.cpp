@@ -8,20 +8,22 @@
 using namespace std;
 
 int main() {
-    std::puts("==== Audio Recorder ====");
-    //avdevice_register_all();
+    std::puts("==== Video-Audio Recorder ====");
 
 	bool closeProgram = false;
 	char command = '\0';
 
+
+	// TODO: Mettere tutti i path assoluti
+	// std::string outputFileName = "./Output/output.mp4";
 	//std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4";
-
 	std::string outputFileName = "C:/Users/chris/Desktop/output.mp4";
-
 	bool audio = true;
 
-	pair<int, int> p1 = {50,50}, p2 = {2000, 1000};
-
+	// Per formare il rettangolo di registrazione
+	// vengono passati il punto in alto a sinistra e il putno in basso a destra.
+	// punti definiti come-> pair{x,y}
+	std::pair<int, int> p1 = std::make_pair(0,0), p2 = std::make_pair(1800, 900);
 	VideoAudioRecorder* capturer = new VideoAudioRecorder{outputFileName, p1, p2, audio};
 	
 
@@ -61,16 +63,12 @@ int main() {
 			throw std::runtime_error(programFailureReason);
 
 		std::this_thread::sleep_for(20s);*/
-		
-		
 
 	}
 	catch (std::exception& e) {
 		fprintf(stderr, "[ERROR] %s\n", e.what());
 		exit(-1);
 	}
-
-	
 		
 	delete capturer;
 
