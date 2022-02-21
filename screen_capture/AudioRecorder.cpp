@@ -165,7 +165,7 @@ void AudioRecorder::StartEncode(std::mutex& write_mutex, std::condition_variable
         //--------------------------------
         // encoding
 
-        uint8_t **cSamples = nullptr;
+        uint8_t** cSamples = nullptr;
         ret = av_samples_alloc_array_and_samples(&cSamples, NULL, audioOutCodecCtx->channels, inputFrame->nb_samples, requireAudioFmt, 0);
         if (ret < 0) {
             throw std::runtime_error("Fail to alloc samples by av_samples_alloc_array_and_samples.");
@@ -188,70 +188,74 @@ void AudioRecorder::StartEncode(std::mutex& write_mutex, std::condition_variable
         av_frame_unref(inputFrame);
         av_packet_unref(inputPacket);
 
-        // frame_size -> n di sample in un frame audio
-        while (av_audio_fifo_size(audioFifo) >= audioOutCodecCtx->frame_size) {
-            AVFrame* outputFrame = av_frame_alloc();
-            outputFrame->nb_samples = audioOutCodecCtx->frame_size;
-            outputFrame->channels = audioInCodecCtx->channels;
-            outputFrame->channel_layout = av_get_default_channel_layout(audioInCodecCtx->channels);
-            outputFrame->format = requireAudioFmt;
-            outputFrame->sample_rate = audioOutCodecCtx->sample_rate;
-
-            ret = av_frame_get_buffer(outputFrame, 0);
-            /*assert(ret >= 0);*/
-            ret = av_audio_fifo_read(audioFifo, (void**)outputFrame->data, audioOutCodecCtx->frame_size);
-            /*assert(ret >= 0);*/
-
-            outputFrame->pts = frameCount * audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
-
-            ret = avcodec_send_frame(audioOutCodecCtx, outputFrame);
-            if (ret < 0) {
-                throw std::runtime_error("Fail to send frame in encoding");
-            }
-            av_frame_free(&outputFrame);
-            ret = avcodec_receive_packet(audioOutCodecCtx, outputPacket);
-            if (ret == AVERROR(EAGAIN)) {
-                continue;
-            }
-            else if (ret < 0) {
-                throw std::runtime_error("Fail to receive packet in encoding");
-            }
-
-
-            outputPacket->stream_index = audioOutStream->index;
-            outputPacket->duration = audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
-            outputPacket->dts = outputPacket->pts =frameCount * audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
-
-            frameCount++;
-
-
+        if (av_audio_fifo_size(audioFifo) >= audioOutCodecCtx->frame_size) {
             // Critic section
             std::unique_lock ul(write_mutex);
 
-            ret = av_interleaved_write_frame(audioOutFormatCtx, outputPacket);
+            // frame_size -> n di sample in un frame audio
+            while (av_audio_fifo_size(audioFifo) >= audioOutCodecCtx->frame_size) {
+                AVFrame* outputFrame = av_frame_alloc();
+                outputFrame->nb_samples = audioOutCodecCtx->frame_size;
+                outputFrame->channels = audioInCodecCtx->channels;
+                outputFrame->channel_layout = av_get_default_channel_layout(audioInCodecCtx->channels);
+                outputFrame->format = requireAudioFmt;
+                outputFrame->sample_rate = audioOutCodecCtx->sample_rate;
 
+                ret = av_frame_get_buffer(outputFrame, 0);
+                /*assert(ret >= 0);*/
+                ret = av_audio_fifo_read(audioFifo, (void**)outputFrame->data, audioOutCodecCtx->frame_size);
+                /*assert(ret >= 0);*/
+
+                outputFrame->pts = frameCount * audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
+
+                ret = avcodec_send_frame(audioOutCodecCtx, outputFrame);
+                if (ret < 0) {
+                    throw std::runtime_error("Fail to send frame in encoding");
+                }
+                av_frame_free(&outputFrame);
+                ret = avcodec_receive_packet(audioOutCodecCtx, outputPacket);
+                if (ret == AVERROR(EAGAIN)) {
+                    continue;
+                }
+                else if (ret < 0) {
+                    throw std::runtime_error("Fail to receive packet in encoding");
+                }
+
+
+                outputPacket->stream_index = audioOutStream->index;
+                outputPacket->duration = audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
+                outputPacket->dts = outputPacket->pts = frameCount * audioOutStream->time_base.den * 1024 / audioOutCodecCtx->sample_rate;
+
+                frameCount++;
+
+                ret = av_interleaved_write_frame(audioOutFormatCtx, outputPacket);
+
+               
+                av_packet_unref(outputPacket);
+
+            }
+            
             ul.unlock();
             // End of Critic section
-            av_packet_unref(outputPacket);
+        }
 
-            // Chiude l'audio prima di andare in pausa
+        // Chiude l'audio prima di andare in pausa
             // Se lo facessi nella funzione 'Pause' di "AudioVideoRecorder" 
             // l'input format context dell'audio potrebbe essere chiuso prima di aver finito 
             // di processare gli ultimi pacchetti
-            if (isStopped.load()) {
-                avformat_close_input(&this->audioInFormatCtx);
-            }
-
-            // Prima di riattivare il thread nella funzione 'Restart' di "AudioVideoRecorder"
-            // si riapre l' input format context dell'audio
-            std::unique_lock s_ul{ stop_mutex };
-            s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
-
+        if (isStopped.load()) {
+            avformat_close_input(&this->audioInFormatCtx);
         }
+
+        // Prima di riattivare il thread nella funzione 'Restart' di "AudioVideoRecorder"
+        // si riapre l' input format context dell'audio
+        std::unique_lock s_ul{ stop_mutex };
+        s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
     }
 
-    av_packet_free(&inputPacket);
     av_packet_free(&outputPacket);
+    av_packet_free(&inputPacket);
     av_frame_free(&inputFrame);
+
     printf("encode %llu audio packets in total.\n", frameCount);
 }

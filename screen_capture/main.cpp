@@ -16,18 +16,20 @@ int main() {
 
 	// TODO: Mettere tutti i path assoluti
 	// std::string outputFileName = "./Output/output.mp4";
-	//std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4";
-	std::string outputFileName = "C:/Users/chris/Desktop/output.mp4";
+	std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4";
+	//std::string outputFileName = "C:/Users/chris/Desktop/output.mp4";
 	bool audio = true;
-
-	// Per formare il rettangolo di registrazione
-	// vengono passati il punto in alto a sinistra e il putno in basso a destra.
-	// punti definiti come-> pair{x,y}
-	std::pair<int, int> p1 = std::make_pair(0,0), p2 = std::make_pair(1800, 900);
-	VideoAudioRecorder* capturer = new VideoAudioRecorder{outputFileName, p1, p2, audio};
+	VideoAudioRecorder* capturer = nullptr;
 	
 
-	try {
+	try {	//----------------------TO DO: capire se necessario deallocare dentro il catch---------------------------------------------
+
+		// Per formare il rettangolo di registrazione
+		// vengono passati il punto in alto a sinistra e il putno in basso a destra.
+		// punti definiti come-> pair{x,y}
+		std::pair<int, int> p1 = std::make_pair(0, 0), p2 = std::make_pair(1280,720);
+		capturer = new VideoAudioRecorder{ outputFileName, p1, p2, audio };
+
 		std::cout << "Welcome to screen capturer" << std::endl;
 
 		capturer->Open();
@@ -69,10 +71,11 @@ int main() {
 		fprintf(stderr, "[ERROR] %s\n", e.what());
 		exit(-1);
 	}
-		
-	delete capturer;
+	
+	if(capturer != nullptr)
+		delete capturer;
 
-    puts("END");
+	std::cout << "END" << std::endl;
     return 0;
 }
  

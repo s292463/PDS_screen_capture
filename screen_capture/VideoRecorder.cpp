@@ -149,6 +149,26 @@ void VideoRecorder::intilizeDecoder() {
 
 }
 
+void VideoRecorder::Reopen() {
+	// rendere pAVInputFormat "globale" ???????????????????????????????????????????????????'
+	const AVInputFormat* pAVInputFormat = av_find_input_format("gdigrab");
+	if (!pAVInputFormat) {
+		throw std::runtime_error("Error in opening input device");
+	}
+
+	// Option dictionary
+	av_dict_set(&options, "framerate", this->framerate.c_str(), 0);
+	av_dict_set(&options, "preset", "medium", 0);
+	av_dict_set(&options, "offset_x", this->offset.first.c_str(), 0);
+	av_dict_set(&options, "offset_y", this->offset.second.c_str(), 0);
+	av_dict_set(&options, "video_size", (this->res.first + "x" + this->res.second).c_str(), 0);
+	av_dict_set(&options, "probesize", "20M", 0);
+
+	if (avformat_open_input(&inputFormatContext, "desktop", pAVInputFormat, &options) < 0) {
+		throw std::runtime_error("Can't open input context");
+	}
+}
+
 void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 {
 	this->outputFormatContext = outputFormatContext;
@@ -363,12 +383,16 @@ void VideoRecorder::startCapturing(std::mutex& write_mutex, std::condition_varia
 				
 			}
 
-			std::unique_lock s_ul{ stop_mutex };
-			s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
-
 		}
 		av_packet_unref(outPacket);
-	
+
+		
+		if (isStopped.load()) {
+			avformat_close_input(&this->inputFormatContext);
+		}
+		
+		std::unique_lock s_ul{ stop_mutex };
+		s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });	
 
 }
 	/*if (av_write_trailer(outputFormatContext) < 0)

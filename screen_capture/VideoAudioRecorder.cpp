@@ -22,6 +22,7 @@ VideoAudioRecorder::VideoAudioRecorder(std::string outputFileName, std::pair<int
 
 	if (p_br.first > horizontal || p_br.second > vertical)
 	{
+		//range_error
 		throw std::runtime_error("Error: this screen portion is too big to be registered ");
 	}
 	else if (p_br.first < 0 || p_br.second < 0) {
@@ -74,6 +75,8 @@ void VideoAudioRecorder::Pause() {
 
 void VideoAudioRecorder::Restart() {
 	std::cout << "Recording restarted" << std::endl;
+	// Ri-apri audio input
+	this->video_recorder->Reopen();
 	// Ri-apri audio input
 	this->audio_recorder->Reopen();
 
