@@ -118,6 +118,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)\include\</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,7 +144,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Origine.cpp" />
+    <ClCompile Include="AudioRecorder.cpp" />
+    <ClCompile Include="ListAVDevices.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="VideoAudioRecorder.cpp" />
+    <ClCompile Include="VideoRecorder.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AudioRecorder.h" />
+    <ClInclude Include="ffmpeg.h" />
+    <ClInclude Include="ListAVDevices.h" />
+    <ClInclude Include="VideoAudioRecorder.h" />
+    <ClInclude Include="VideoRecorder.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

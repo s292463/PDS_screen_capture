@@ -7,7 +7,7 @@
 using namespace std;
 
 /* driver function to run the application */
-int main()
+int ciccio()
 {
 	ScreenRecorder screen_record;
 
