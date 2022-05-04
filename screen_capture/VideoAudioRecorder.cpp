@@ -1,9 +1,10 @@
 #include "VideoAudioRecorder.h"
+#include <libavformat/avio.h>
 
 
 void VideoAudioRecorder::GetDesktopResolution(int& horizontal, int& vertical)
 {
-	RECT desktop;
+	/*RECT desktop;
 	// Get a handle to the desktop window
 	const HWND hDesktop = GetDesktopWindow();
 	// Get the size of screen to the variable desktop
@@ -12,13 +13,13 @@ void VideoAudioRecorder::GetDesktopResolution(int& horizontal, int& vertical)
 	// and the bottom right corner will have coordinates
 	// (horizontal, vertical)
 	horizontal = desktop.right;
-	vertical = desktop.bottom;
+	vertical = desktop.bottom;*/
 }
 
 VideoAudioRecorder::VideoAudioRecorder(std::string outputFileName, std::pair<int, int>& p_tl, std::pair<int, int>& p_br, bool audio) :
 	outputFileName(outputFileName), failReason(""), audio(audio), isRun(true), isStopped(false)
 {
-	GetDesktopResolution(this->horizontal, this->vertical);
+	/*GetDesktopResolution(this->horizontal, this->vertical);
 
 	if (p_br.first > horizontal || p_br.second > vertical)
 	{
@@ -27,7 +28,7 @@ VideoAudioRecorder::VideoAudioRecorder(std::string outputFileName, std::pair<int
 	}
 	else if (p_br.first < 0 || p_br.second < 0) {
 		throw std::runtime_error("Error: You cant insert negative points ");
-	}
+	}*/
 
 	std::pair<std::string, std::string> offset = std::make_pair(std::to_string(p_tl.first), std::to_string(p_tl.second));
 	std::pair<std::string, std::string> resolution = { std::to_string(p_br.first - p_tl.first), std::to_string(p_br.second - p_tl.second) };
@@ -69,16 +70,17 @@ void VideoAudioRecorder::Open() {
 }
 
 void VideoAudioRecorder::Pause() {
-	std::cout << "Recording stopped" << std::endl;
+	std::cout << "Recording is paused" << std::endl;
 	this->isStopped.exchange(true);
 }
 
 void VideoAudioRecorder::Restart() {
 	std::cout << "Recording restarted" << std::endl;
-	// Ri-apri audio input
+	// Ri-apri video input
 	this->video_recorder->Reopen();
 	// Ri-apri audio input
-	this->audio_recorder->Reopen();
+    if(this->audio)
+	    this->audio_recorder->Reopen();
 
 	this->isStopped.exchange(false);
 	this->stopped_cv.notify_all();
@@ -129,7 +131,7 @@ void VideoAudioRecorder::Stop() {
 
 }
 
-int VideoAudioRecorder::outputInit() {
+void VideoAudioRecorder::outputInit() {
 
 	// Alloco il format context di output
 	if (avformat_alloc_output_context2(&outputFormatContext, NULL, NULL, outputFileName.c_str()) < 0) {

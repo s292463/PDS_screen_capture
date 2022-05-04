@@ -40,19 +40,19 @@ void AudioRecorder::Open()
         }
     }
     deviceName = "audio=" + deviceName;
-    const AVInputFormat *inputFormat = av_find_input_format("dshow");
+    this->inputFormat = av_find_input_format("dshow");
 /*#elif MACOS
     if(deviceName == "") deviceName = ":0";
-    AVInputFormat *inputFormat = av_find_input_format("avfoundation");
+    this->inputFormat= av_find_input_format("avfoundation");
     //"[[VIDEO]:[AUDIO]]"
-#elif UNIX
+    */
+#elif linux
     if(deviceName == "") deviceName = "default";
-    AVInputFormat *inputFormat=av_find_input_format("pulse");
-*/
+    this->inputFormat=av_find_input_format("pulse");
 #endif
 
 
-    ret = avformat_open_input(&audioInFormatCtx, deviceName.c_str(), inputFormat, &options);
+    ret = avformat_open_input(&audioInFormatCtx, deviceName.c_str(), this->inputFormat, &options);
     if (ret != 0) {
         throw std::runtime_error("Couldn't open input audio stream.");
     }
@@ -133,7 +133,7 @@ void AudioRecorder::initializeEncoder(AVFormatContext* outputFormatContext) {
 }
 
 void AudioRecorder::Reopen() {
-    avformat_open_input(&this->audioInFormatCtx, this->deviceName.c_str(), av_find_input_format("dshow"), nullptr);
+    avformat_open_input(&this->audioInFormatCtx, this->deviceName.c_str(), this->inputFormat, nullptr);
 }
 
 void AudioRecorder::StartEncode(std::mutex& write_mutex, std::condition_variable& s_cv, std::atomic_bool& isStopped)
@@ -257,5 +257,5 @@ void AudioRecorder::StartEncode(std::mutex& write_mutex, std::condition_variable
     av_packet_free(&inputPacket);
     av_frame_free(&inputFrame);
 
-    printf("encode %llu audio packets in total.\n", frameCount);
+    printf("encode %lu audio packets in total.\n", frameCount);
 }

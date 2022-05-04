@@ -42,35 +42,21 @@ void VideoRecorder::Open() {
 	intilizeDecoder();
 }
 
-//void VideoRecorder::Start() {
-//
-//	t_capturer = new std::thread{
-//		[this]() {
-//			try {
-//				this->startCapturing(this->num_frame);
-//			}
-//			catch (std::exception& e) {
-//				this->failReason = e.what();
-//			}
-//
-//		}
-//	};
-//
-//	t_capturer->join();
-//
-//}
-
-//void VideoRecorder::Stop() {
-//
-//	if (!this->isRun) return; //avoid run twice
-//}
 
 void VideoRecorder::intilizeDecoder() {
-
-	const AVInputFormat* pAVInputFormat = av_find_input_format("gdigrab");
-	if (!pAVInputFormat) {
+    this->inputFormat = nullptr;
+#ifdef _WIN32
+    this->inputFormat = av_find_input_format("gdigrab");
+	if (!this->inputFormat) {
 		throw std::runtime_error("Error in opening input device");
 	}
+#elif linux
+    this->inputFormat = av_find_input_format("x11grab");
+    if (!this->inputFormat) {
+        throw std::runtime_error("Error in opening input device");
+    }
+#endif
+
 
 	// Option dictionary
 	av_dict_set(&options, "framerate", this->framerate.c_str(), 0);
@@ -86,11 +72,19 @@ void VideoRecorder::intilizeDecoder() {
 	if (!avformat_alloc_context()) {
 		throw std::runtime_error("Can't allocate input context");
 	}
-	if (avformat_open_input(&inputFormatContext, "desktop", pAVInputFormat, &options) < 0) {
+#ifdef _WIN32
+	if (avformat_open_input(&inputFormatContext, "desktop", const_cast<AVInputFormat*>(this->inputFormat), &options) < 0)
+    {
 		throw std::runtime_error("Can't open input context");
 	}
+#elif linux
+    if(avformat_open_input(&inputFormatContext, ":0.0+10,250", const_cast<AVInputFormat*>(this->inputFormat), &options) != 0)
+    {
+        throw std::runtime_error("Can't open input context");
+    }
+#endif
 
-	//Read packets of a media file to get stream information.
+    //Read packets of a media file to get stream information.
 	if (avformat_find_stream_info(inputFormatContext, &options) < 0)
 	{
 		throw std::runtime_error("\nunable to find the stream information");
@@ -143,30 +137,30 @@ void VideoRecorder::intilizeDecoder() {
 	{
 		throw std::runtime_error("\nUnable to open the av codec");
 	}
-
+    // TODO eliminare "inputFileName"
 	//Stampo le informazioni dell' input format context
 	av_dump_format(inputFormatContext, 0, this->inputFileName.c_str(), 0);
 
 }
 
 void VideoRecorder::Reopen() {
-	// rendere pAVInputFormat "globale" ???????????????????????????????????????????????????'
-	const AVInputFormat* pAVInputFormat = av_find_input_format("gdigrab");
-	if (!pAVInputFormat) {
-		throw std::runtime_error("Error in opening input device");
-	}
-
-	// Option dictionary
-	av_dict_set(&options, "framerate", this->framerate.c_str(), 0);
-	av_dict_set(&options, "preset", "medium", 0);
-	av_dict_set(&options, "offset_x", this->offset.first.c_str(), 0);
-	av_dict_set(&options, "offset_y", this->offset.second.c_str(), 0);
-	av_dict_set(&options, "video_size", (this->res.first + "x" + this->res.second).c_str(), 0);
-	av_dict_set(&options, "probesize", "20M", 0);
-
-	if (avformat_open_input(&inputFormatContext, "desktop", pAVInputFormat, &options) < 0) {
+// Option dictionary
+    av_dict_set(&options, "framerate", this->framerate.c_str(), 0);
+    av_dict_set(&options, "preset", "medium", 0);
+    av_dict_set(&options, "offset_x", this->offset.first.c_str(), 0);
+    av_dict_set(&options, "offset_y", this->offset.second.c_str(), 0);
+    av_dict_set(&options, "video_size", (this->res.first + "x" + this->res.second).c_str(), 0);
+    av_dict_set(&options, "probesize", "20M", 0);
+#ifdef _WIN32
+    if (avformat_open_input(&inputFormatContext, "desktop", const_cast<AVInputFormat*>(this->inputFormat), &options) < 0) {
 		throw std::runtime_error("Can't open input context");
 	}
+#elif linux
+    if(avformat_open_input(&inputFormatContext, ":0.0+10,250", const_cast<AVInputFormat*>(this->inputFormat), &options) < 0){
+        throw std::runtime_error("Can't open input context");
+    }
+
+#endif
 }
 
 void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
@@ -197,7 +191,7 @@ void VideoRecorder::initializeEncoder(AVFormatContext* outputFormatContext)
 	videoEncoderContext->time_base.num = 1;
 	videoEncoderContext->time_base.den = 15; // 15 fps
 	//videoEncoderContext->time_base = inStream->time_base;
-	//videoEncoderContext->bit_rate = 400000;
+	videoEncoderContext->bit_rate = 4000000;
 
 
 	if (avcodec_open2(videoEncoderContext, videoEncoder, nullptr) < 0) //Effettuo un check
@@ -250,7 +244,7 @@ void VideoRecorder::startCapturing(std::mutex& write_mutex, std::condition_varia
 	AVFrame* outFrame = av_frame_alloc();
 	if (!outFrame) { std::cout << "Error on allocating output Frame"; exit(1); }
 
-	int video_outbuf_size;
+
 	int nbytes = av_image_get_buffer_size(videoEncoderContext->pix_fmt, videoEncoderContext->width, videoEncoderContext->height, 32);
 
 	uint8_t* video_outbuf = (uint8_t*)av_malloc(nbytes);
@@ -294,113 +288,103 @@ void VideoRecorder::startCapturing(std::mutex& write_mutex, std::condition_varia
 
 	std::mutex stop_mutex;
 
-	while (isRun->load())
-	{
-	// av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
+	while (isRun->load()) {
+        // av_read_frame legge i pacchetti del formatContext sequenzialmente come una readFile
+        if (av_read_frame(inputFormatContext, inPacket) < 0) {
+            throw std::runtime_error("Error on reading packet");
+        }
 
-		if (av_read_frame(inputFormatContext, inPacket) < 0) {
-			throw std::runtime_error("Error on reading packet");
-		}
+        // Poiche' il formatContext e' uno solo dobbiamo distinguere noi da quale
+        // stream arriva il paccketto in modo da processarlo correttamente
+        if (inPacket->stream_index == stream_index[StreamType::VIDEO]) {
+            // Letto il pacchetto(=frame compresso) lo mandiamo al decoder attraverso
+            // il codecContext
+            if (avcodec_send_packet(videoDecoderContext, inPacket) < 0) {
+                throw std::runtime_error("Error on sending packet");
+            }
+            //std::cout << "In packet size: " << inPacket->size << std::endl;
+            int value = avcodec_receive_frame(videoDecoderContext, inFrame);
 
-		// Poiche' il formatContext e' uno solo dobbiamo distinguere noi da quale
-		// stream arriva il paccketto in modo da processarlo correttamente
-		if (inPacket->stream_index == stream_index[StreamType::VIDEO]) {
-			// Letto il pacchetto(=frame compresso) lo mandiamo al decoder attraverso
-			// il codecContext
-			if (avcodec_send_packet(videoDecoderContext, inPacket) < 0) {
-				throw std::runtime_error("Error on sending packet");
-			}
-			//std::cout << "In packet size: " << inPacket->size << std::endl;
-			int value = avcodec_receive_frame(videoDecoderContext, inFrame);
+            if (value == AVERROR(EAGAIN) || value == AVERROR_EOF) {
+                throw std::runtime_error("\nOutput not available in this state.  Try to send new input.");
+            } else if (value < 0) {
+                throw std::runtime_error("\nError during decoding");
+            }
+            //std::cout << "Input frame Number: " << videoDecoderContext->frame_number << std::endl;
+            //std::cout << "In frame linesize: " << inFrame->linesize << std::endl;
 
-			if (value == AVERROR(EAGAIN) || value == AVERROR_EOF) {
-				throw std::runtime_error("\nOutput not available in this state.  Try to send new input.");
-			}
-			else if (value < 0)
-			{
-				throw std::runtime_error("\nError during decoding");
-			}
-			//std::cout << "Input frame Number: " << videoDecoderContext->frame_number << std::endl;
-			//std::cout << "In frame linesize: " << inFrame->linesize << std::endl;
-
-			value = sws_scale(swsCtx_, inFrame->data, inFrame->linesize, 0, videoDecoderContext->height, outFrame->data, outFrame->linesize);
-			if (value < 0) {
-				throw std::runtime_error("\nProblem with sws_scale");
-			}
+            value = sws_scale(swsCtx_, inFrame->data, inFrame->linesize, 0, videoDecoderContext->height, outFrame->data,
+                              outFrame->linesize);
+            if (value < 0) {
+                throw std::runtime_error("\nProblem with sws_scale");
+            }
 
 
-			outPacket->data = nullptr;    // i dati del pacchetto verranno allocati dall'encoder
-			outPacket->size = 0;
+            outPacket->data = nullptr;    // i dati del pacchetto verranno allocati dall'encoder
+            outPacket->size = 0;
 
-			outFrame->width = videoEncoderContext->width;
-			outFrame->height = videoEncoderContext->height;
-			outFrame->format = videoEncoderContext->pix_fmt;
-
-
-			value = avcodec_send_frame(videoEncoderContext, outFrame);
-			if (value < 0) {
-				throw std::runtime_error("Error in sending frame");
-			}
-			value = avcodec_receive_packet(videoEncoderContext, outPacket);
-			if (value == AVERROR(EAGAIN)) {
-				std::cout << "output is not available right now" << std::endl;
-				continue;
-			}
-			else if (value < 0 && value != AVERROR_EOF)
-			{
-				throw std::runtime_error("\nError during encoding");
-			}
-			//std::cout << "Out packet size: " << outPacket->size << std::endl;
+            outFrame->width = videoEncoderContext->width;
+            outFrame->height = videoEncoderContext->height;
+            outFrame->format = videoEncoderContext->pix_fmt;
 
 
-			if (value >= 0) {
-
-				//std::cout << "\rFrame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
-
-				//outPacket->stream_index = video_stream_index;
-				//outPacket->duration = outStream->time_base.den / outStream->time_base.num / inStream->avg_frame_rate.num * inStream->avg_frame_rate.den;
-				//av_packet_rescale_ts(outPacket, in_stream->time_base, out_stream->time_base);
-				/*outPacket->dts = av_rescale_q_rnd(outPacket->dts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
-				outPacket->pts = av_rescale_q_rnd(outPacket->pts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
-				outPacket->duration = av_rescale_q(outPacket->duration, videoEncoderContext->time_base, outStream->time_base);*/
-
-				if (outPacket->pts != AV_NOPTS_VALUE)
-					outPacket->pts = av_rescale_q(outPacket->pts, videoEncoderContext->time_base, outStream->time_base);
-
-				if (outPacket->dts != AV_NOPTS_VALUE)
-					outPacket->dts = av_rescale_q(outPacket->dts, videoEncoderContext->time_base, outStream->time_base);
+            value = avcodec_send_frame(videoEncoderContext, outFrame);
+            if (value < 0) {
+                throw std::runtime_error("Error in sending frame");
+            }
+            value = avcodec_receive_packet(videoEncoderContext, outPacket);
+            if (value == AVERROR(EAGAIN)) {
+                std::cout << "output is not available right now" << std::endl;
+                continue;
+            } else if (value < 0 && value != AVERROR_EOF) {
+                throw std::runtime_error("\nError during encoding");
+            }
+            //std::cout << "Out packet size: " << outPacket->size << std::endl;
 
 
-				// Critic section
-				std::unique_lock ul(write_mutex);
+            if (value >= 0) {
 
-				if (av_interleaved_write_frame(outputFormatContext, outPacket) < 0) {
-					std::cout << "Error muxing packet" << std::endl;
-					break;
-				}
+                //std::cout << "\rFrame number " << videoDecoderContext->frame_number << ", successfully encoded" << std::endl;
 
-				ul.unlock();
-				
-			}
+                //outPacket->stream_index = video_stream_index;
+                //outPacket->duration = outStream->time_base.den / outStream->time_base.num / inStream->avg_frame_rate.num * inStream->avg_frame_rate.den;
+                //av_packet_rescale_ts(outPacket, in_stream->time_base, out_stream->time_base);
+                /*outPacket->dts = av_rescale_q_rnd(outPacket->dts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
+                outPacket->pts = av_rescale_q_rnd(outPacket->pts, videoEncoderContext->time_base, outStream->time_base, AV_ROUND_NEAR_INF);
+                outPacket->duration = av_rescale_q(outPacket->duration, videoEncoderContext->time_base, outStream->time_base);*/
 
-		}
-		av_packet_unref(outPacket);
+                if (outPacket->pts != AV_NOPTS_VALUE)
+                    outPacket->pts = av_rescale_q(outPacket->pts, videoEncoderContext->time_base, outStream->time_base);
 
-		
-		if (isStopped.load()) {
-			avformat_close_input(&this->inputFormatContext);
-		}
-		
-		std::unique_lock s_ul{ stop_mutex };
-		s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });	
+                if (outPacket->dts != AV_NOPTS_VALUE)
+                    outPacket->dts = av_rescale_q(outPacket->dts, videoEncoderContext->time_base, outStream->time_base);
 
-}
-	/*if (av_write_trailer(outputFormatContext) < 0)
-	{
-		throw std::runtime_error("\nError in writing av trailer");
-	}*/
 
-	// TODO: memory leakage potrebbe finire prima di liberare queste risorse
+                // Critic section
+                std::unique_lock ul(write_mutex);
+
+                if (av_interleaved_write_frame(outputFormatContext, outPacket) < 0) {
+                    std::cout << "Error muxing packet" << std::endl;
+                    break;
+                }
+
+                ul.unlock();
+
+            }
+
+        }
+        av_packet_unref(outPacket);
+
+
+        if (isStopped.load()) {
+            avformat_close_input(&this->inputFormatContext);
+        }
+
+        std::unique_lock s_ul{stop_mutex};
+        s_cv.wait(s_ul, [&isStopped] { return !isStopped.load(); });
+
+    }
+
 	av_free(video_outbuf);
 	av_packet_free(&outPacket);
 	av_packet_free(&inPacket);

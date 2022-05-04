@@ -1,10 +1,16 @@
+// modificata
 #include "VideoRecorder.h"
 #include "AudioRecorder.h"
 #include "ffmpeg.h"
 #include <thread>
 #include <mutex>
 #include <atomic>
+//aggiunto #ifdef
+#ifdef _WIN32
 #include "wtypes.h"
+#elif linux
+#include <linux/types.h>
+#endif
 #include <utility>
 
 #pragma once
@@ -50,7 +56,7 @@ public:
 
 	void Stop();
 
-	int outputInit();
+	void outputInit();
 
 	std::string getFailureReason();
 };

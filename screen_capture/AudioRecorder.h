@@ -1,3 +1,4 @@
+// modificato
 #ifndef AUDIORECORDER_AUDIORECORDER_H
 #define AUDIORECORDER_AUDIORECORDER_H
 
@@ -12,6 +13,7 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+#include <condition_variable>
 
 
 using std::string;
@@ -33,6 +35,8 @@ private:
     AVFormatContext *audioOutFormatCtx;
     AVStream        *audioOutStream;
     AVCodecContext  *audioOutCodecCtx;
+    //aggiunto const
+    const AVInputFormat   *inputFormat;
 
     std::atomic_bool     *isRun;
     std::thread         *audioThread;

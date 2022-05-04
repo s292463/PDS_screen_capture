@@ -16,10 +16,12 @@ int main() {
 
 	// TODO: Mettere tutti i path assoluti
 	// std::string outputFileName = "./Output/output.mp4";
-	std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4";
-	//std::string outputFileName = "C:/Users/chris/Desktop/output.mp4";
+    std::string outputFileName = "C:/Users/elia_/OneDrive/Desktop/output.mp4"; // ELIA WINDOWS
+	//std::string outputFileName = "C:/Users/chris/Desktop/output.mp4"; // CHRIS WINDOWS
+    //std::string outputFileName = "/home/ilchrees/Desktop/output.mp4"; //CHRIS LINUX
 	bool audio = true;
 	VideoAudioRecorder* capturer = nullptr;
+    char command_status;
 	
 
 	try {	//----------------------TO DO: capire se necessario deallocare dentro il catch---------------------------------------------
@@ -27,7 +29,7 @@ int main() {
 		// Per formare il rettangolo di registrazione
 		// vengono passati il punto in alto a sinistra e il putno in basso a destra.
 		// punti definiti come-> pair{x,y}
-		std::pair<int, int> p1 = std::make_pair(0, 0), p2 = std::make_pair(1280,720);
+		std::pair<int, int> p1 = std::make_pair(200, 200), p2 = std::make_pair(500, 500);
 		capturer = new VideoAudioRecorder{ outputFileName, p1, p2, audio };
 
 		std::cout << "Welcome to screen capturer" << std::endl;
@@ -47,16 +49,25 @@ int main() {
 			{
 			case's':
 				capturer->Pause();
+                command_status = command;
 				break;
 			case'r':
-				capturer->Restart();
+                if(command_status == 's'){
+                    capturer->Restart();
+                    command_status = command;
+                }
+                else {
+                    std::cout << "Cannot restart. You should stop the system first" << std::endl;
+                }
 				break;
 			case'c':
 				capturer->Stop();
 				closeProgram = true;
 				break;
+
 			default:
 				std::cout << "Not available command" << std::endl;
+                command_status = '\0';
 				break;
 			}
 		}

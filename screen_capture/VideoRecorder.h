@@ -7,7 +7,7 @@ extern "C"
 #include "libavdevice/avdevice.h"
 
 #include "libavfilter/avfilter.h"
-	//#include "libavfilter/avfiltergraph.h"
+//#include "libavfilter/avfiltergraph.h"
 #include "libavfilter/buffersink.h"
 #include "libavfilter/buffersrc.h"
 
@@ -78,6 +78,7 @@ class VideoRecorder
 	AVStream* inStream = nullptr;
 
 	AVDictionary* options = nullptr;
+    const AVInputFormat* inputFormat;
 
 	// Capture Options
 	std::string failReason;
